@@ -68,4 +68,5 @@ function download_source {
 
 GNU_URL='http://mirrors.ustc.edu.cn/gnu'
 download_source "${GNU_URL}/make" 'make-4.3.tar.gz' 'e05fdde47c5f7ca45cb697e973894ff4f5d79e13b750ed57d7b66d8defc78e19'
+download_source "${GNU_URL}/bash" 'bash-5.0.tar.gz' 'b4a80f2ac66170b2913efbfb9f2594f1f76c7b1afd11f799e22035d63077fb4d'
 
