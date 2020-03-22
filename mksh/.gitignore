@@ -1,0 +1,8 @@
+*.o
+/mksh
+.*.swp
+/FAQ.htm
+/Rebuild.sh
+/lksh.cat1
+/mksh.cat1
+/test.sh
