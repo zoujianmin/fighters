@@ -12,7 +12,7 @@ else
 	export FI_HOST_BUILD='true'
 	export FI_PREFIX=/opt/fight
 	export FI_HOST='x86_64-linux-gnu'
-	export FI_LDFLAGS="-Wl,-rpath=${FI_PREFIX}/lib"
+	export FI_LDFLAGS="-L${FI_PREFIX}/lib -Wl,-rpath=${FI_PREFIX}/lib"
 	export FI_CFLAGS='-Wall -O2 -fPIC -D_GNU_SOURCE'
 	export PATH=/usr/bin:/usr/sbin:/bin:/sbin
 fi

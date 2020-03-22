@@ -4,9 +4,9 @@
 # 2020/03/22
 #
 
-CC       := $(ZDTC_PREFIX)gcc
-CFLAGS   := -Wall -fPIC -D_GNU_SOURCE -fno-lto -Wno-deprecated-declarations -fno-asynchronous-unwind-tables \
-	-fno-strict-aliasing -fstack-protector-strong -malign-data=abi -Wall -fwrapv -I. -DMKSH_BUILDSH \
+CC       := $(FI_TCPREFIX)gcc
+CFLAGS   := -fno-lto -Wno-deprecated-declarations -fno-asynchronous-unwind-tables -fno-strict-aliasing \
+	-fstack-protector-strong -malign-data=abi -Wall -fwrapv -I. -DMKSH_BUILDSH \
 	-DSETUID_CAN_FAIL_WITH_EAGAIN -DHAVE_STRING_POOLING=2 -DHAVE_ATTRIBUTE_BOUNDED=0 -DHAVE_ATTRIBUTE_FORMAT=1 \
 	-DHAVE_ATTRIBUTE_NORETURN=1 -DHAVE_ATTRIBUTE_PURE=1 -DHAVE_ATTRIBUTE_UNUSED=1 -DHAVE_ATTRIBUTE_USED=1 \
 	-DHAVE_SYS_TIME_H=1 -DHAVE_TIME_H=1 -DHAVE_BOTH_TIME_H=1 -DHAVE_SYS_BSDTYPES_H=0 -DHAVE_SYS_FILE_H=1 \
@@ -20,21 +20,25 @@ CFLAGS   := -Wall -fPIC -D_GNU_SOURCE -fno-lto -Wno-deprecated-declarations -fno
 	-DHAVE_NICE=1 -DHAVE_REVOKE=0 -DHAVE_SETLOCALE_CTYPE=1 -DHAVE_LANGINFO_CODESET=1 -DHAVE_SELECT=1 \
 	-DHAVE_SETRESUGID=1 -DHAVE_SETGROUPS=1 -DHAVE_STRERROR=1 -DHAVE_STRSIGNAL=1 -DHAVE_STRLCPY=0 \
 	-DHAVE_FLOCK_DECL=1 -DHAVE_REVOKE_DECL=1 -DHAVE_SYS_ERRLIST_DECL=1 -DHAVE_SYS_SIGLIST_DECL=1 \
-	-DHAVE_PERSISTENT_HISTORY=1 -DMKSH_BUILD_R=571 -O2
+	-DHAVE_PERSISTENT_HISTORY=1 -DMKSH_BUILD_R=571 -O2 $(FI_CFLAGS)
 LDFLAGS  := -O2 -fno-lto -Wno-deprecated-declarations -fno-asynchronous-unwind-tables -fno-strict-aliasing \
-	-fstack-protector-strong -malign-data=abi -Wall -fwrapv  -fno-lto
+	-fstack-protector-strong -malign-data=abi -Wall -fwrapv  -fno-lto $(FI_LDFLAGS)
 OBJECTS  := lalloc.o edit.o eval.o exec.o expr.o funcs.o histrap.o jobs.o lex.o main.o misc.o shf.o syn.o \
 	tree.o var.o strlcpy.o
 TARGETS  := mksh $(OBJECTS)
 
-.PHONY : all clean
+.PHONY : all clean install
 
 all : $(TARGETS)
+
 mksh : $(OBJECTS)
 	$(CC) $(LDFLAGS) -o mksh $(OBJECTS)
 
 %.o : %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
+
+install : mksh
+	cp -v -p -u $< $(FI_PREFIX)/bin/
 
 clean :
 	rm -rf $(TARGETS)
