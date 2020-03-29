@@ -135,14 +135,15 @@ function download_packages {
 		'e05fdde47c5f7ca45cb697e973894ff4f5d79e13b750ed57d7b66d8defc78e19'
 	retv=$? ; [ ${retv} -ne 0 ] && return ${retv}
 
-	download_source "${GNU_URL}/bash" 'bash-5.0.tar.gz' \
-		'b4a80f2ac66170b2913efbfb9f2594f1f76c7b1afd11f799e22035d63077fb4d'
-	retv=$? ; [ ${retv} -ne 0 ] && return ${retv}
-
 	download_source "http://www.oberhumer.com/opensource/lzo/download" "lzo-2.10.tar.gz" \
 		'c0f892943208266f9b6543b3ae308fab6284c5c90e627931446fb49b4221a072'
 	retv=$? ; [ ${retv} -ne 0 ] && return ${retv}
 
+	return 0
+}
+
+function clean {
+	rm -rf -v "${FI_BUILDDIR}"/.*.prepared
 	return 0
 }
 
@@ -152,7 +153,6 @@ fi
 
 download_packages || exit $?
 comple_package 'make-4.3.tar.gz' || exit $?
-comple_package 'bash-5.0.tar.gz' || exit $?
 comple_package 'lzo-2.10.tar.gz' || exit $?
 comple_package 'mksh'            || exit $?
 
