@@ -154,6 +154,7 @@ fi
 download_packages || exit $?
 comple_package 'make-4.3.tar.gz' || exit $?
 comple_package 'lzo-2.10.tar.gz' || exit $?
+comple_package 'python-lzo'      || exit $?
 comple_package 'mksh'            || exit $?
 
 exit 0

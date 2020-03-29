@@ -55,10 +55,14 @@ if sys.platform == "win32":
     extra_objects.append(lib_file)
 else:
     libraries = ["lzo2"]
-    include_dirs.append(os.environ.get("PREFIX", "/usr")+"/include/lzo")
-    ##library_dirs.append("/usr/local/lib")
-    ##runtime_library_dirs.append("/usr/local/lib")
-
+    fi_prefix = os.environ.get("FI_PREFIX", "/nonexist_directory")
+    include_dirs.append(fi_prefix + "/include")
+    library_dirs.append(fi_prefix + "/lib")
+    runtime_library_dirs.append(fi_prefix + "/lib")
+    fi_cflags = os.environ.get("FI_CFLAGS")
+    if fi_cflags is not None:
+        for fi_cflag in fi_cflags.split(' '):
+            extra_compile_args.append(fi_cflag)
     # Add extra compile flag for MacOS X
     if sys.platform[:-1] == "darwin":
         extra_link_args.append("-flat_namespace")
