@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+
+# Created by xiaoqzye@qq.com
+# Dark-energy compressor for figter project
+# 2020/03/29
+
+import os
+import sys
+import lzo
+import stat
+import struct
+import os.path as opath
+
+# Global definitions, refer to C file, darken_head.h
+DARKEN_HEAD_MAGIC        = 0x2f2f2123
+DARKEN_HEAD_LENMIN       = 0x20
+DARKEN_HEAD_LENMAX       = 0x00100000
+DARKEN_HEAD_CRC32        = 0x79a87904
+DARKEN_HEAD_NAME_SIZE    = 0x10
+DARKEN_HEAD_TYPE_SHELL   = 0x4c454853
+DARKEN_HEAD_TYPE_LUABC   = 0x4241554c
+
+# from dark_energy.h:
+DARKEN_LIST_MAGIC        = 0x07ce1f52
+DARKEN_LIST_MAXNUM       = 0x000000ff
+DARKEN_LIST_MAXID        = 0x00ffffff
+
+# Global variables, the path of output files
+fileh, fileb = None, None
+DARKEN_INDEX = 0
+# Get the Dark-Energy list ID
+def get_darken_list_id(arg1):
+    listID = None
+    try:
+        listID = int(arg1, base=0)
+    except ValueError as errp:
+        print(errp, file=sys.stderr)
+        sys.exit(1)
+    if listID < 0 or listID > DARKEN_LIST_MAXID:
+        print("Error, invalid dark-enerty list ID: {0}".format(arg1), file=sys.stderr)
+        sys.exit(2)
+    return listID << 8
+# Create output files
+def get_output_handles(arg2, dlnum):
+    global fileh, fileb
+    outh, outb = None, None
+    try:
+        fileh = "{0}.h".format(arg2)
+        outh = open(fileh, "wt")
+    except OSError as errp:
+        print(errp, file=sys.stderr)
+        return None, None
+    try:
+        fileb = "{0}.fz".format(arg2)
+        outb = open(fileb, "wb")
+    except OSError as errp:
+        outh.close()
+        print(errp, file=sys.stderr)
+        return None, None
+    # Get the basename of output files
+    bnam = opath.basename(arg2).upper()
+    outh.write("/* AUTO-GENERATED C HEADER FILE, DO NOT EDIT */\n")
+    outh.write("#ifndef DARKEN_LIST_{0}\n#define DARKEN_LIST_{0} 1\n".format(bnam))
+    outb.write(struct.pack('<II', DARKEN_LIST_MAGIC, dlnum))
+    return outh, outb
+
+def unlink_output(exval):
+    global fileh, fileb
+    if fileh and os.access(fileh, os.F_OK):
+        os.unlink(fileh)
+    if fileb and os.access(fileb, os.F_OK):
+        os.unlink(fileb)
+    sys.exit(exval)
+
+def process_file(farg, outh, outb, lid):
+    global DARKEN_INDEX
+    argst, argtype = None, None
+    # get the file name
+    bnam = opath.basename(farg)
+    if bnam.endswith('.sh'):
+        bnam = bnam[:-3]
+        argtype = DARKEN_HEAD_TYPE_SHELL
+    elif bnam.endswith('.lc'):
+        bnam = bnam[:-3]
+        argtype = DARKEN_HEAD_TYPE_LUABC
+    else:
+        print("Error, invalid file name: {0}".format(farg), file=sys.stderr)
+        return False
+    # truncate the file name if too long
+    if len(bnam) >= DARKEN_HEAD_NAME_SIZE:
+        bnam = bnam[:DARKEN_HEAD_NAME_SIZE - 1]
+    # Get the file state information
+    try:
+        argst = os.stat(farg)
+    except OSError as errp:
+        print(errp, file=sys.stderr)
+        return False
+    if not stat.S_ISREG(argst.st_mode):
+        print("Error, not a regular file: {0}".format(farg), file=sys.stderr)
+        return False
+    fSize = argst.st_size
+    if fSize < DARKEN_HEAD_LENMIN or fSize > DARKEN_HEAD_LENMAX:
+        print("Error, invalid size for {0}: {1}".format(farg, fSize), file=sys.stderr)
+        return False
+    harg = open(farg, "rb") # open the file
+    darg = harg.read(-1)    # read the whole file into memory
+    assert fSize == len(darg) # check that we've read the whole file
+    crcval = lzo.crc32(darg, DARKEN_HEAD_CRC32) & 0xffffffff # calculate the CRC32 value
+    darg = lzo.compress(darg, 9, True) # compress the data via LZO2 compression
+    darg = lzo.optimize(darg, True) # optimize the compressed data
+    larg = len(darg) # get the length of compress data
+    # write the C header file
+    idx = DARKEN_INDEX
+    if (idx % 5) == 0:
+        outh.write("\n/* Dark-Energy entry from {0} to {1}: */\n".format(idx, idx + 4))
+    idx = lid | DARKEN_INDEX
+    outh.write("#define DARKEN_IDX_{0} {1:#x}u\n".format(bnam.upper(), idx))
+    outb.write(struct.pack("<IIIIII16s", DARKEN_HEAD_MAGIC, fSize, larg,
+        crcval, argtype, idx, bytearray(bnam, 'utf-8')))
+    outb.write(darg) # write the compressed data
+    print("Dark-Energy compressed: {0:.2f}% for {1}".format(larg * 100 / fSize, farg))
+    larg = 0x4 - (larg & 0x3)
+    if larg < 0x4: # ensure that data is 4-byte aligned
+        outb.write(b'\x00' * larg)
+    DARKEN_INDEX += 1 # increment global index
+    if DARKEN_INDEX > DARKEN_LIST_MAXNUM:
+        print("Error, too many darken-entries!", file=sys.stderr)
+        return False
+    return True
+# check the number of arguments
+argc = len(sys.argv)
+if argc < 0x4:
+    print("Error, invalid number of argument(s) given: {0}".format(argc), file=sys.stderr)
+    sys.exit(3)
+# Get the list ID
+lstID = get_darken_list_id(sys.argv[1])
+# Get the file handles
+hout, bout = get_output_handles(sys.argv[2], lstID | (argc - 0x3))
+if not hout or not bout:
+    unlink_output(4)
+# process the files given on command-line one-by-one
+for argf in sys.argv[3:]:
+    if not process_file(argf, hout, bout, lstID):
+        unlink_output(5)
+# close the output files
+hout.write("\n#endif\n"); hout.close()
+bout.write(b'\x00\x00\x00\x00\xff\xff\xff\xff'); bout.close()
+print("Dark-Energy generation DONE.", file=sys.stdout); sys.exit(0)
+
