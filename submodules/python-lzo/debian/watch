@@ -1,0 +1,16 @@
+# uscan(1) configuration file.
+version=3
+
+opts=\
+repacksuffix=+dfsg,\
+dversionmangle=s/\+dfsg\d*//,\
+ https://pypi.debian.net/python-lzo/python-lzo-(\d[\d\.]+)\.(?:zip|tgz|tbz|txz|(?:tar\.(?:gz|bz2|xz)))
+
+#opts=\
+#repacksuffix=+dfsg,\
+#dversionmangle=s/\+dfsg\d*//,\
+# https://pypi.python.org/simple/python-lzo/ \
+# .*/python-lzo-(\d[\d\.]+)\.tar\.(?:gz|bz2|xz)(?:#.*)
+
+#filenamemangle=s{.*/([^/#]+)#md5=[0-9a-f]+}{$1},\
+#http://www.oberhumer.com/opensource/lzo/download/lzo-(\d[\d.]+)\.tar\.(?:gz|xz|bz2)

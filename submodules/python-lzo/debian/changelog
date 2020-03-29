@@ -1,0 +1,55 @@
+python-lzo (1.12-4) UNRELEASED; urgency=medium
+
+  [ Ondřej Nový ]
+  * Bump Standards-Version to 4.4.1.
+
+  [ Debian Janitor ]
+  * Set upstream metadata fields: Bug-Database, Bug-Submit, Repository,
+    Repository-Browse.
+
+ -- Ondřej Nový <onovy@debian.org>  Fri, 18 Oct 2019 15:27:00 +0200
+
+python-lzo (1.12-3) unstable; urgency=medium
+
+  * Team upload.
+  * d/control: Remove ancient X-Python-Version field
+  * d/control: Remove ancient X-Python3-Version field
+  * d/watch: Use https protocol
+  * Use debhelper-compat instead of debian/compat.
+  * Drop Python 2 support.
+  * Bump debhelper compat level to 12.
+  * Bump standards version to 4.4.0 (no changes).
+
+ -- Ondřej Nový <onovy@debian.org>  Thu, 08 Aug 2019 13:19:16 +0200
+
+python-lzo (1.12-2) unstable; urgency=medium
+
+  * Introduced "python3-lzo" package (Closes: #898206).
+  * Build-Depends:
+    + python3-all-dev
+    + python3-nose
+
+ -- Dmitry Smirnov <onlyjob@debian.org>  Mon, 23 Jul 2018 14:21:33 +1000
+
+python-lzo (1.12-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Build-Depends += "python-nose".
+  * Build using pybuild.
+  * Vcs URLs to Salsa.
+  * Updated watch file.
+  * Updated Homepage URL.
+  * Standards-Version: 4.1.5.
+  * debhelper & compat to version 11.
+  * Testsuite: autopkgtest-pkg-python.
+  * Set Python Team as Maintainer; Added myself to Uploaders.
+
+ -- Dmitry Smirnov <onlyjob@debian.org>  Mon, 23 Jul 2018 14:09:41 +1000
+
+python-lzo (1.08-1) unstable; urgency=low
+
+  * Initial import (Closes: #671375)
+  * add patches/01-use-lzo2-insteadof-lzo.patch to use lzo2 instead of lzo
+  * add patches/02-fix-exception-handling-in-test.patch
+
+ -- Mehdi Abaakouk <sileht@sileht.net>  Mon, 07 May 2012 19:31:01 +0200

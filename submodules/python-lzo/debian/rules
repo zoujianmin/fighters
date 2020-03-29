@@ -1,0 +1,12 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export PYBUILD_NAME=lzo
+
+# Force use setup.py build system instead of broken Makefile
+# to build against multiple python version
+%:
+	dh $@ --with python3 --buildsystem=pybuild

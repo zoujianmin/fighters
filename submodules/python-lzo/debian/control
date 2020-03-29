@@ -1,0 +1,29 @@
+Source: python-lzo
+Maintainer: Debian Python Modules Team <python-modules-team@lists.alioth.debian.org>
+Uploaders: Mehdi Abaakouk <sileht@sileht.net>, Dmitry Smirnov <onlyjob@debian.org>
+Section: python
+Priority: optional
+Standards-Version: 4.4.1
+Build-Depends: debhelper-compat (= 12), dh-python
+    ,python3-all-dev
+    ,liblzo2-dev
+    ,python3-nose
+Homepage: https://pypi.org/project/python-lzo/
+Vcs-Browser: https://salsa.debian.org/python-team/modules/python-lzo
+Vcs-Git: https://salsa.debian.org/python-team/modules/python-lzo.git
+Testsuite: autopkgtest-pkg-python
+
+Package: python3-lzo
+Architecture: any
+Depends: ${misc:Depends}, ${python3:Depends}, ${shlibs:Depends}
+Description: Python bindings for the LZO data compression library (Python 3)
+ This module provides Python bindings for the LZO data compression library.
+ .
+ LZO is a portable lossless data compression library written in ANSI C.
+ It offers pretty fast compression and *very* fast decompression.
+ Decompression requires no memory.
+ .
+ In addition there are slower compression levels achieving a quite
+ competitive compression ratio while still decompressing at
+ .
+ This package is for Python 3.

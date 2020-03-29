@@ -1,0 +1,38 @@
+Last-Update: 2018-07-23
+Forwarded: no
+Author: Dmitry Smirnov <onlyjob@member.fsf.org>
+Description: disable failing test
+
+~~~~
+ERROR: tests.test.test_version
+Traceback (most recent call last):
+  File "/usr/lib/python2.7/dist-packages/nose/case.py", line 197, in runTest
+    self.test(*self.arg)
+  File "/build/python-lzo-1.12/.pybuild/cpython2_2.7_lzo/build/tests/test.py", line 92, in test_version
+    pkg_version = pkg_resources.require("python-lzo")[0].version
+  File "/usr/lib/python2.7/dist-packages/pkg_resources/__init__.py", line 888, in require
+    needed = self.resolve(parse_requirements(requirements))
+  File "/usr/lib/python2.7/dist-packages/pkg_resources/__init__.py", line 774, in resolve
+    raise DistributionNotFound(req, requirers)
+DistributionNotFound: The 'python-lzo' distribution was not found and is required by the application
+~~~~
+
+--- a/tests/test.py
++++ b/tests/test.py
+@@ -88,12 +88,12 @@
+     print("compressed %6d -> %6d" % (len(src), len(c)))
+ 
+ def test_version():
+     import pkg_resources
+-    pkg_version = pkg_resources.require("python-lzo")[0].version
+-    mod_version = lzo.__version__.decode('utf-8')
+-    assert pkg_version == mod_version, \
+-        "%r != %r" %(pkg_version, mod_version)
++#    pkg_version = pkg_resources.require("python-lzo")[0].version
++#    mod_version = lzo.__version__.decode('utf-8')
++#    assert pkg_version == mod_version, \
++#        "%r != %r" %(pkg_version, mod_version)
+ 
+ def test_lzo():
+     yield gen, b"aaaaaaaaaaaaaaaaaaaaaaaa"
+     yield gen_raw, b"aaaaaaaaaaaaaaaaaaaaaaaa"
