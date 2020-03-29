@@ -11,6 +11,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <signal.h>
 #include <fcntl.h>
@@ -19,6 +20,9 @@
 #include "darken_head.h"
 #include "dark_energy.h"
 #define DARK_ENERGY_MAGIC           0x6678cef6
+
+static pid_t darken_run_fork(const struct darken_head * dh, const void * wdata,
+    int dataLen, int * pcwfd, int optrun) __attribute__((noinline));
 
 const void * darken_find(const void * where, uint32_t dlnum)
 {
@@ -382,17 +386,82 @@ const void * darken_output(struct dark_energy * cde, int * outLen)
 
 static int darken_pipe_size(int pipefd, int newSize)
 {
+    int ret, oldSize, err_n;
 
+    errno = 0;
+    ret = fcntl(pipefd, F_GETPIPE_SZ, 0);
+    if (ret <= 0) {
+        err_n = errno;
+        fprintf(stderr, "Error, failed get pipe size: %s\n", strerror(err_n));
+        fflush(stderr);
+        errno = err_n;
+        return -1;
+    }
 
+    oldSize = ret;
+    if (oldSize >= newSize)
+        return 0;
+
+    errno = 0;
+    ret = fcntl(pipefd, F_SETPIPE_SZ, newSize);
+    if (ret < 0) {
+        err_n = errno;
+        fprintf(stderr, "Error, failed set pipe size: %s\n", strerror(err_n));
+        fflush(stderr);
+        errno = err_n;
+        return -1;
+    }
+    return oldSize;
 }
 
-static pid_t darken_run_fork(const struct darken_head * dh, int * pcrfd,
-	int * pcwfd, int optrun)
+static int darken_cloexec(int fdp, int setCloEXEC)
+{
+    int ret, fflags, err_n;
+
+    ret = fcntl(fdp, F_GETFD, 0);
+    if (ret < 0) {
+        err_n = errno;
+        fprintf(stderr, "Error, failed get FD/CLOEXEC: %s\n", strerror(err_n));
+        fflush(stderr); errno = err_n;
+        return -1;
+    }
+
+    fflags = ret;
+    if (setCloEXEC != 0)
+        fflags |= FD_CLOEXEC;
+    else
+        fflags &= ~FD_CLOEXEC;
+    if (ret == fflags)
+        return 0;
+
+    ret = fcntl(fdp, F_SETFD, fflags);
+    if (ret < 0) {
+        err_n = errno;
+        fprintf(stderr, "Error, failed %s FD/CLOEXEC: %s\n",
+            setCloEXEC ? "set" : "clear", strerror(err_n));
+        fflush(stderr); errno = err_n;
+        return -1;
+    }
+    return 0;
+}
+
+pid_t darken_run_fork(const struct darken_head * dh, const void * wdata,
+    int dataLen, int * pcwfd_, int optrun)
 {
 	pid_t newp;
+    ssize_t rl1;
+    int crfds[2], * pcrfd;
+    int cwfds[2], * pcwfd;
 	int ret, err_n, stdfd0[2];
 
-	stdfd0[0] = stdfd0[1] = -1;
+    newp = (pid_t) -1l;
+    crfds[0] = crfds[1] = -1;
+    cwfds[0] = cwfds[1] = -1;
+    stdfd0[0] = stdfd0[1] = -1;
+    pcrfd = NULL; pcwfd = NULL;
+    if (pcwfd_ != NULL) pcwfd = cwfds;
+    if (wdata != NULL && dataLen > 0) pcrfd = crfds;
+
 	ret = pipe2(stdfd0, O_CLOEXEC);
 	if (ret == 0 && pcrfd != NULL)
 		ret = pipe2(pcrfd, O_CLOEXEC);
@@ -400,51 +469,188 @@ static pid_t darken_run_fork(const struct darken_head * dh, int * pcrfd,
 		ret = pipe2(pcwfd, O_CLOEXEC);
 	if (ret != 0) {
 		err_n = errno;
-		close_fds(stdfd0);
 		close_fds(pcrfd);
 		close_fds(pcwfd);
+		close_fds(stdfd0);
 		fprintf(stderr, "Error, cannot create pipes: %s\n", strerror(err_n));
 		fflush(stderr);
 		errno = err_n;
-		return -1;
+		return newp;
 	}
 
 	/* modify pipe sizes */
+    if (darken_pipe_size(stdfd0[1], (int) dh->dh_newlen) < 0) {
+        close_fds(pcrfd);
+        close_fds(pcwfd);
+        close_fds(stdfd0);
+        return newp;
+    }
+
+    /* write the compressed script to pipe */
+    rl1 = write(stdfd0[1], dh->dh_data, (size_t) dh->dh_newlen);
+    if (rl1 != (ssize_t) dh->dh_newlen) {
+        err_n = errno;
+		close_fds(pcrfd);
+		close_fds(pcwfd);
+		close_fds(stdfd0);
+        fprintf(stderr, "Error, failed to write pipe with %ld: %s\n",
+            (long) rl1, strerror(err_n));
+        fflush(stderr); errno = err_n;
+        return newp;
+    }
+    close(stdfd0[1]); stdfd0[1] = -1; /* close the write end of pipe */
+
+    /* write program arguments */
+    if (pcrfd != NULL) {
+        darken_pipe_size(pcrfd[1], dataLen); errno = 0;
+        rl1 = write(pcrfd[1], wdata, (size_t) dataLen);
+        if (rl1 != (ssize_t) dataLen) {
+            err_n = errno;
+            close_fds(pcrfd);
+            close_fds(pcwfd);
+            close_fds(stdfd0);
+            fprintf(stderr, "Error, failed to write array: %s\n", strerror(err_n));
+            fflush(stderr); errno = err_n;
+            return newp;
+        }
+        close(pcrfd[1]); pcrfd[1] = -1;
+    }
 
 	newp = 0;
 	if ((optrun & DARKEN_NOFORK) == 0)
 		newp = fork();
 	if (newp < 0) {
 		err_n = errno;
-		close_fds(stdfd0);
 		close_fds(pcrfd);
 		close_fds(pcwfd);
+		close_fds(stdfd0);
 		fprintf(stderr, "Error, cannot create child process: %s\n", strerror(err_n));
 		fflush(stderr);
 		errno = err_n;
-		return -2;
+		return -1;
 	}
 
 	if (newp == 0) {
+        /* child process starts to run here */
+        int ret;
+        char tmpBuf[32];
+        const char * envName;
+
+        if (optrun & DARKEN_NOSTD12) {
+            int fd12, fdc;
+
+            /* replace stdout & stderr with /dev/null */
+            fd12 = open("/dev/null", O_WRONLY);
+            if (fd12 >= 0) {
+                fdc = 0;
+                if (fd12 != STDOUT_FILENO) {
+                    fdc++;
+                    /* duplicate as stdout */
+                    dup2(fd12, STDOUT_FILENO);
+                    darken_cloexec(STDOUT_FILENO, 0);
+                }
+
+                if (fd12 != STDERR_FILENO) {
+                    fdc++;
+                    /* duplicate as stderr */
+                    dup2(fd12, STDERR_FILENO);
+                    darken_cloexec(STDERR_FILENO, 0);
+                }
+                if (fdc == 0x2)
+                    close(fd12);
+            } else {
+                fputs("Error, cannot open /dev/null!\n", stderr);
+                fflush(stderr);
+            }
+        }
+
+        envName = "DEARGVFD";
+        if (pcrfd != NULL) {
+            snprintf(tmpBuf, sizeof(tmpBuf), "%d", pcrfd[0]);
+            ret = setenv(envName, tmpBuf, 1);
+            if (ret != 0) {
+                err_n = errno;
+                fprintf(stderr, "Error, failed to push file descriptor: %s\n", strerror(err_n));
+                fflush(stderr);
+                _exit(90);
+            }
+            darken_cloexec(pcrfd[0], 0);
+        } else
+            unsetenv(envName);
+
+        envName = "DEOUTPFD";
+        if (pcwfd != NULL) {
+            close(pcwfd[0]); pcwfd[0] = -1;
+            snprintf(tmpBuf, sizeof(tmpBuf), "%d", pcwfd[1]);
+            ret = setenv(envName, tmpBuf, 1);
+            if (ret != 0) {
+                err_n = errno;
+                fprintf(stderr, "Error, failed to push file descriptor: %s\n", strerror(err_n));
+                fflush(stderr);
+                _exit(91);
+            }
+            darken_cloexec(pcwfd[1], 0);
+        } else
+            unsetenv(envName);
+
+        /* set stdandard input file descriptor */
+        if (stdfd0[0] != STDIN_FILENO) {
+            ret = dup2(stdfd0[0], STDIN_FILENO);
+            if (ret == -1) {
+                err_n = errno;
+                fprintf(stderr, "Error, cannot set stdin for subprocess: %s\n", strerror(err_n));
+                fflush(stderr);
+                _exit(92);
+            }
+            close(stdfd0[0]); stdfd0[0] = -1;
+            darken_cloexec(STDIN_FILENO, 0);
+        }
+
+        switch (dh->dh_type) {
+        case DARKEN_HEAD_TYPE_SHELL:
+            execl("/bin/mksh", "mksh", "-s", "--", NULL);
+            execl("/usr/bin/mksh", "mksh", "-s", "--", NULL);
+            ret = 93;
+            break;
+
+        case DARKEN_HEAD_TYPE_LUABC:
+            execl("/bin/lua", "lua", "-", NULL);
+            execl("/usr/bin/lua", "lua", "-", NULL);
+            ret = 94;
+            break;
+
+        default:
+            ret = 95;
+            break;
+        }
+        fprintf(stderr, "Error, cannot invoke interpreter: %d\n", ret);
+        fflush(stderr); _exit(ret);
 	}
+
+    close(stdfd0[0]);
+    if (pcrfd != NULL)
+        close(pcrfd[0]);
+    if (pcwfd != NULL) {
+        *pcwfd_ = pcwfd[0];
+        close(pcwfd[1]); pcwfd[1] = -1;
+    }
+    return newp;
 }
 
 struct dark_energy * darken_run(const void * darken, const void * wdat,
     int datLen, int runopt)
 {
-	int ret, err_n;
+    pid_t pnew;
+	int ret, prfd;
+    struct stat stdst;
 	struct dark_energy * pde;
 	const struct darken_head * pdh;
-	int crfd[2], cwfd[2];
 
-	pde = NULL;
-	crfd[0] = crfd[1] = -1;
-	cwfd[0] = cwfd[1] = -1;
-
+    prfd = -1;
 	pdh = (const struct darken_head *) darken;
 	if (pdh == NULL ||
 		pdh->dh_magic != DARKEN_HEAD_MAGIC ||
-		pdh->dh_newlen > 0x00100000) {
+		pdh->dh_newlen == 0 || pdh->dh_newlen > DARKEN_HEAD_LENMAX) {
 		fprintf(stderr, "Error, invalid dark-energy entry: %p, magic: %#x\n",
 			pdh, (pdh != NULL) ? pdh->dh_magic : 0x0);
 		fflush(stderr);
@@ -465,5 +671,40 @@ struct dark_energy * darken_run(const void * darken, const void * wdat,
 		return NULL;
 	}
 
+    /* if fork is disabled, output from new application will not be needed */
+    if (runopt & DARKEN_NOFORK)
+        runopt &= ~DARKEN_OUTPUT;
+
+    /* the stdin/stdout/stderr file descriptors should be open */
+    ret = fstat(STDIN_FILENO, &stdst);
+    if (ret == 0)
+        ret = fstat(STDOUT_FILENO, &stdst);
+    if (ret == 0)
+        ret = fstat(STDERR_FILENO, &stdst);
+    if (ret != 0) {
+        fputs("Error, invalid stdandard file descriptor(s)\n", stderr);
+        fflush(stderr);
+        return NULL;
+    }
+
+    pde = (struct dark_energy *) calloc(0x1, sizeof(struct dark_energy));
+    if (pde == NULL) {
+        fputs("Error, System out of memory!\n", stderr);
+        fflush(stderr);
+        return NULL;
+    }
+
+    pnew = darken_run_fork(pdh, wdat, datLen, (runopt & DARKEN_OUTPUT) ? &prfd : NULL, runopt);
+    if (pnew < 0) {
+        free(pde);
+        return NULL;
+    }
+    pde->de_magic = DARK_ENERGY_MAGIC;
+    pde->de_rfd   = prfd;
+    pde->de_pid   = pnew;
+    pde->de_out   = NULL;
+    pde->de_len   = 0;
+    pde->de_stat  = 0;
+    return pde;
 }
 

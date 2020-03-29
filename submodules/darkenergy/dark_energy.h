@@ -38,7 +38,7 @@ struct dark_energy {
     uint32_t                   de_magic;     /* magic value */
     int                        de_rfd;       /* read file descriptor */
     long                       de_pid;       /* pid of child process */
-#define DARK_ENERGY_BUFSIZ     0x10000       /* 64K */
+#define DARK_ENERGY_BUFSIZ     0x40000       /* 256K */
     unsigned char *            de_out;       /* pointer to output buffer */
     int                        de_len;       /* length of output buffer in bytes */
     int                        de_stat;      /* child process exit status */

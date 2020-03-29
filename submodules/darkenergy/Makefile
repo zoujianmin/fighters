@@ -6,7 +6,8 @@
 # 2020/03/29
 
 CC       := gcc
-CFLAGS   := -Wall -fPIC -O3 -D_GNU_SOURCE -I.
+CFLAGS   := -I. $(FI_CFLAGS) -I$(FI_PREFIX)/include
+LDFLAGS  := $(FI_LDFLAGS)
 TARGETS  := darken_un.o dark_energy.o
 
 .PHONY : all clean
