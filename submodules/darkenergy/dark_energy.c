@@ -24,6 +24,92 @@
 static pid_t darken_run_fork(const struct darken_head * dh, const void * wdata,
     int dataLen, int * pcwfd, int optrun) __attribute__((noinline));
 
+int darken_waitpid(long pidc, int waitopt, int * runp, int * exstp)
+{
+    pid_t rpid;
+    int exval, waitop;
+
+    if (pidc <= 0) {
+        fprintf(stderr, "Error, invalid child process ID: %ld\n", (long) pidc);
+        fflush(stderr);
+        return -1;
+    }
+
+    if (waitopt != DARKEN_WAIT_NOHANG &&
+        waitopt != DARKEN_WAIT_HANG &&
+        waitopt != DARKEN_WAIT_FOREVER) {
+        fprintf(stderr, "Error, invalid wait option: %#x\n", (unsigned int) waitopt);
+        fflush(stderr);
+        return -2;
+    }
+
+    waitop = WUNTRACED | WCONTINUED;
+    if (waitopt == DARKEN_WAIT_NOHANG)
+        waitop |= WNOHANG;
+
+waitAgain:
+    exval = 0; errno = 0;
+    rpid = waitpid(pidc, &exval, waitop);
+    if (rpid < 0) {
+        int err_n;
+
+        err_n = errno;
+        if (err_n == EINTR) {
+            if (waitopt == DARKEN_WAIT_FOREVER) {
+                fprintf(stderr, "Warning, waiting for child process: %ld...\n", (long) pidc);
+                fflush(stderr);
+                goto waitAgain;
+            }
+            *runp = 1; /* child process running happily... */
+            return 0;
+        }
+
+        if (err_n == ECHILD) {
+            /* no such child process */
+            *runp = 0;
+            return 0;
+        }
+
+        fprintf(stderr, "Error, waitpid(%ld) has failed: %s\n", (long) pidc, strerror(err_n));
+        fflush(stderr);
+        *runp = 0;
+        errno = err_n;
+        return -3;
+    }
+
+    if (rpid == 0) {
+        *runp = 1; /* child process running happily... */
+        return 0;
+    }
+
+    if (WIFSTOPPED(exval) != 0) {
+        if (waitopt == DARKEN_WAIT_FOREVER) {
+            fprintf(stderr, "Warning, child process has stopped: %ld\n", (long) pidc);
+            fflush(stderr);
+            goto waitAgain;
+        }
+        *runp = 1;
+        return 0;
+    }
+
+    if (WIFCONTINUED(exval) != 0) {
+        if (waitopt == DARKEN_WAIT_FOREVER) {
+            fprintf(stderr, "Warning, child process has continued: %ld\n", (long) pidc);
+            fflush(stderr);
+            goto waitAgain;
+        }
+        *runp = 1;
+        return 0;
+    }
+
+    *runp = 0; /* child process has terminated */
+    if (WIFEXITED(exval) != 0)
+        *exstp = WEXITSTATUS(exval);
+    else
+        *exstp = WTERMSIG(exval);
+    return 0;
+}
+
 const void * darken_find(const void * where, uint32_t dlnum)
 {
 	uint32_t dlidx, idx, dlmax;
@@ -225,8 +311,11 @@ again:
 	if (rpid < 0) {
 		ret = errno;
 		if (ret == EINTR) {
-			if (waitopt == DARKEN_WAIT_FOREVER)
+			if (waitopt == DARKEN_WAIT_FOREVER) {
+                fprintf(stderr, "Warning, thread waiting for child process: %ld\n", de->de_pid);
+                fflush(stderr);
 				goto again;
+            }
 			*running = 1;
 			return 0;
 		}
@@ -236,6 +325,7 @@ again:
 			de->de_pid = -1;
 			return 0;
 		}
+
 		fprintf(stderr, "Error, waitid(%ld) has failed: %s\n",
 			(long) wpid, strerror(ret));
 		fflush(stderr);
@@ -255,8 +345,11 @@ again:
 		fprintf(stderr, "Warning, child has been stopped or continued: %#x\n",
 			(unsigned int) ret);
 		fflush(stderr);
-		if (waitopt == DARKEN_WAIT_FOREVER)
+		if (waitopt == DARKEN_WAIT_FOREVER) {
+            fprintf(stderr, "Warning, thread waiting for child process: %ld\n", de->de_pid);
+            fflush(stderr);
 			goto again;
+        }
 		*running = 1;
 		return 0;
 	}
@@ -273,6 +366,7 @@ again:
 	*running = 0;
 	de->de_pid = -1;
 	ret = wsi.si_status;
+    de->de_stat = ret;
 	return (ret < 0) ? -ret : ret;
 }
 
@@ -558,6 +652,8 @@ pid_t darken_run_fork(const struct darken_head * dh, const void * wdata,
                 }
                 if (fdc == 0x2)
                     close(fd12);
+                else
+                    darken_cloexec(fd12, 0);
             } else {
                 fputs("Error, cannot open /dev/null!\n", stderr);
                 fflush(stderr);
@@ -637,12 +733,29 @@ pid_t darken_run_fork(const struct darken_head * dh, const void * wdata,
     return newp;
 }
 
+static int de_check_stdio(void)
+{
+    int ret;
+    struct stat stdst;
+
+    ret = fstat(STDIN_FILENO, &stdst);
+    if (ret == 0)
+        ret = fstat(STDOUT_FILENO, &stdst);
+    if (ret == 0)
+        ret = fstat(STDERR_FILENO, &stdst);
+    if (ret != 0) {
+        fputs("Error, invalid stdandard file descriptor(s)\n", stderr);
+        fflush(stderr);
+        return -1;
+    }
+    return 0;
+}
+
 struct dark_energy * darken_run(const void * darken, const void * wdat,
     int datLen, int runopt)
 {
     pid_t pnew;
-	int ret, prfd;
-    struct stat stdst;
+	int ret, prfd, running;
 	struct dark_energy * pde;
 	const struct darken_head * pdh;
 
@@ -676,16 +789,8 @@ struct dark_energy * darken_run(const void * darken, const void * wdat,
         runopt &= ~DARKEN_OUTPUT;
 
     /* the stdin/stdout/stderr file descriptors should be open */
-    ret = fstat(STDIN_FILENO, &stdst);
-    if (ret == 0)
-        ret = fstat(STDOUT_FILENO, &stdst);
-    if (ret == 0)
-        ret = fstat(STDERR_FILENO, &stdst);
-    if (ret != 0) {
-        fputs("Error, invalid stdandard file descriptor(s)\n", stderr);
-        fflush(stderr);
+    if (de_check_stdio() < 0)
         return NULL;
-    }
 
     pde = (struct dark_energy *) calloc(0x1, sizeof(struct dark_energy));
     if (pde == NULL) {
@@ -699,12 +804,162 @@ struct dark_energy * darken_run(const void * darken, const void * wdat,
         free(pde);
         return NULL;
     }
+
     pde->de_magic = DARK_ENERGY_MAGIC;
     pde->de_rfd   = prfd;
     pde->de_pid   = pnew;
     pde->de_out   = NULL;
     pde->de_len   = 0;
     pde->de_stat  = 0;
+    if (runopt & DARKEN_NOWAIT)
+        return pde;
+
+    running = 0;
+    /* wait until child process terminates */
+    ret = darken_wait(pde, 0, DARKEN_WAIT_FOREVER, &running);
+    if (ret < 0) {
+        darken_free(pde, 1);
+        return NULL;
+    }
     return pde;
+}
+
+int darken_exec(struct dark_exec * pde, int runopt)
+{
+    pid_t newp;
+    int ret, pfds[2];
+    int running, exst;
+    const char * exeName;
+
+    newp = (pid_t) -1l;
+    pfds[0] = pfds[1] = -1;
+    exeName = (pde != NULL) ? pde->de_argv[0] : NULL;
+    if (exeName == NULL || pde->de_argv[DARKEN_EXEC_ARGS] != NULL)
+        return -1;
+
+    if (runopt & DARKEN_NOFORK)
+        runopt &= ~DARKEN_OUTPUT;
+
+    if (de_check_stdio() < 0)
+        return -2;
+
+    if (runopt & DARKEN_OUTPUT) {
+        ret = pipe2(pfds, O_CLOEXEC);
+        if (ret < 0) {
+            fprintf(stderr, "Error, failed to create pipe: %d\n", errno);
+            fflush(stderr);
+            return -3;
+        }
+
+        /* set the maximum pipe buffer size */
+        darken_pipe_size(pfds[1], DARK_ENERGY_BUFSIZ);
+    }
+
+    newp = fork();
+    if (newp < 0) {
+        fprintf(stderr, "Error, failed to create child process: %d\n", errno);
+        fflush(stderr);
+        close_fds(pfds);
+        return -4;
+    }
+
+    if (newp == 0 && (runopt & DARKEN_NOSTD12) != 0) {
+        int fd012, fdc;
+
+        /* zip the stdio */
+        fd012 = open("/dev/null", O_RDWR | O_CLOEXEC);
+        if (fd012 >= 0) {
+            fdc = 0;
+            if (fd012 != STDIN_FILENO) {
+                fdc++;
+                dup2(fd012, STDIN_FILENO);
+                darken_cloexec(STDIN_FILENO, 0);
+            }
+
+            if (fd012 != STDOUT_FILENO) {
+                fdc++;
+                dup2(fd012, STDOUT_FILENO);
+                darken_cloexec(STDOUT_FILENO, 0);
+            }
+
+            if (fd012 != STDERR_FILENO) {
+                fdc++;
+                dup2(fd012, STDERR_FILENO);
+                darken_cloexec(STDERR_FILENO, 0);
+            }
+            if (fdc == 0x3)
+                close(fd012);
+            else
+                darken_cloexec(fd012, 0);
+        } else {
+            fputs("Error, failed to open null device!\n", stderr);
+            fflush(stderr);
+        }
+    }
+
+    if (newp == 0) {
+        if (pfds[1] >= 0) {
+            close(pfds[0]); pfds[0] = -1;
+            if (pfds[1] != STDOUT_FILENO) {
+                dup2(pfds[1], STDOUT_FILENO);
+                darken_cloexec(STDOUT_FILENO, 0);
+                close(pfds[1]); pfds[1] = -1;
+            } else
+                darken_cloexec(pfds[1], 0);
+        }
+        execvp(exeName, (char * const *) pde->de_argv);
+        _exit(96);
+    }
+
+    /* close the write end of pipe */
+    if (pfds[1] >= 0) {
+        close(pfds[1]);
+        pfds[1] = -1;
+    }
+
+    pde->de_pid = newp;
+    pde->de_out = NULL;
+    pde->de_len = 0;
+    pde->de_outfd = pfds[0];
+    pde->de_stat = 0;
+    if (runopt & DARKEN_NOWAIT)
+        return 0;
+
+    running = 0; exst = 0;
+    ret = darken_waitpid(newp, DARKEN_WAIT_FOREVER, &running, &exst);
+    if (ret < 0) {
+        pde->de_pid = -1;
+        if (pde->de_outfd != -1) {
+            close(pde->de_outfd);
+            pde->de_outfd = -1;
+        }
+        return -5;
+    }
+
+    pde->de_pid = -1;
+    pde->de_outfd = -1;
+    pde->de_stat = exst;
+    if (pfds[0] >= 0) {
+        ssize_t rl1;
+        unsigned char * rbuf;
+
+        rbuf = (unsigned char *) malloc(DARK_ENERGY_BUFSIZ + 0x1);
+        if (rbuf == NULL) {
+            fputs("Error, read-BUF out of memory!\n", stderr);
+            fflush(stderr);
+            close(pfds[0]);
+            return 0;
+        }
+
+        rl1 = read(pfds[0], rbuf, DARK_ENERGY_BUFSIZ);
+        if (rl1 <= 0) {
+            free(rbuf);
+            close(pfds[0]);
+            return 0;
+        }
+        pde->de_out = rbuf;
+        pde->de_len = (int) rl1;
+    }
+    return 0;
 }
 

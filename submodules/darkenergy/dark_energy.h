@@ -54,8 +54,6 @@ int darken_free_struct(struct dark_energy * de, long * pPid, int * prfd);
 #define DARKEN_LOWPRIORITY     0x08          /* run child process with very low priority */
 #define DARKEN_NOFORK          0x10          /* do not fork child process */
 #define DARKEN_MASK            0x1f
-#define DARKEN_CRFD            0x8           /* child read file descriptor */
-#define DARKEN_CWFD            0x9           /* child write file descriptor */
 struct dark_energy * darken_run(const void * darken, const void * wdat,
     int datLen, int runopt);
 
@@ -75,6 +73,24 @@ int darken_has_child(long pidc);
  * try to get the dark-energy's output buffer
  */
 const void * darken_output(struct dark_energy * cde, int * outLen);
+
+#define DARKEN_EXEC_ARGS       8
+struct dark_exec {
+    long                       de_pid;       /* pid of child process */
+    const char *               de_argv[DARKEN_EXEC_ARGS + 1];
+    unsigned char *            de_out;       /* output of child process */
+    int                        de_len;       /* length of output buffer, caller should free this memory */
+    int                        de_outfd;     /* output file descriptor of child process */
+    int                        de_stat;      /* exit status of child process */
+};
+
+int darken_exec(struct dark_exec * pde, int runopt);
+
+int darken_waitpid(long pidc, int waitopt, int * runp, int * exstp);
+
+/*
+ * create a simple child process
+ */
 
 #ifdef __cplusplus
 }
