@@ -292,7 +292,7 @@ c_fc(const char **wp)
 
 	/* Run editor on selected lines, then run resulting commands */
 
-	tf = maketemp(ATEMP, TT_HIST_EDIT, &e->temps);
+	tf = maketemp(ATEMP, TT_HIST_EDIT, &pef->temps);
 	if (!(shf = tf->shf)) {
 		bi_errorf(Tf_temp, Tcreate, tf->tffn, cstrerror(errno));
 		return (1);

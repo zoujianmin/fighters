@@ -1226,15 +1226,15 @@ c_getopts(const char **wp)
 		return (1);
 	}
 
-	if (e->loc->next == NULL) {
+	if (pef->loc->next == NULL) {
 		internal_warningf(Tf_sD_s, Tgetopts, Tno_args);
 		return (1);
 	}
 	/* Which arguments are we parsing... */
 	if (*wp == NULL)
-		wp = e->loc->next->argv;
+		wp = pef->loc->next->argv;
 	else
-		*--wp = e->loc->next->argv[0];
+		*--wp = pef->loc->next->argv[0];
 
 	/* Check that our saved state won't cause a core dump... */
 	for (argc = 0; wp[argc]; argc++)
@@ -1356,7 +1356,7 @@ c_shift(const char **wp)
 	int n;
 	mksh_ari_t val;
 	const char *arg;
-	struct block *l = e->loc;
+	struct block *l = pef->loc;
 
 	if ((l->flags & BF_RESETSPEC)) {
 		/* prevent pollution */
@@ -1555,7 +1555,7 @@ c_dot(const char **wp)
 	if (wp[builtin_opt.optind + 1]) {
 		argv = wp + builtin_opt.optind;
 		/* preserve $0 */
-		argv[0] = e->loc->argv[0];
+		argv[0] = pef->loc->argv[0];
 		for (argc = 0; argv[argc + 1]; argc++)
 			;
 	} else {
@@ -2153,7 +2153,7 @@ c_exitreturn(const char **wp)
 		 * need to tell if this is exit or return so trap exit will
 		 * work right (POSIX)
 		 */
-		for (ep = e; ep; ep = ep->oenv)
+		for (ep = pef; ep; ep = ep->oenv)
 			if (STOP_RETURN(ep->type)) {
 				how = LRETURN;
 				break;
@@ -2199,7 +2199,7 @@ c_brkcont(const char **wp)
 	quit = (unsigned int)n;
 
 	/* Stop at E_NONE, E_PARSE, E_FUNC, or E_INCL */
-	for (ep = e; ep && !STOP_BRKCONT(ep->type); ep = ep->oenv)
+	for (ep = pef; ep && !STOP_BRKCONT(ep->type); ep = ep->oenv)
 		if (ep->type == E_LOOP) {
 			if (--quit == 0)
 				break;
@@ -2240,7 +2240,7 @@ c_set(const char **wp)
 {
 	int argi;
 	bool setargs;
-	struct block *l = e->loc;
+	struct block *l = pef->loc;
 
 	if ((l->flags & BF_RESETSPEC)) {
 		/* prevent pollution */
@@ -2487,19 +2487,19 @@ c_exec(const char **wp MKSH_A_UNUSED)
 	int i;
 
 	/* make sure redirects stay in place */
-	if (e->savefd != NULL) {
+	if (pef->savefd != NULL) {
 		for (i = 0; i < NUFILE; i++) {
-			if (e->savefd[i] > 0)
-				close(e->savefd[i]);
+			if (pef->savefd[i] > 0)
+				close(pef->savefd[i]);
 			/*
 			 * keep all file descriptors > 2 private for ksh,
 			 * but not for POSIX or legacy/kludge sh
 			 */
 			if (!Flag(FPOSIX) && !Flag(FSH) && i > 2 &&
-			    e->savefd[i])
+			    pef->savefd[i])
 				fcntl(i, F_SETFD, FD_CLOEXEC);
 		}
-		e->savefd = NULL;
+		pef->savefd = NULL;
 	}
 	return (0);
 }

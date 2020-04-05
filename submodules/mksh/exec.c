@@ -132,9 +132,9 @@ execute(struct op * volatile t,
 	flags &= ~XTIME;
 
 	if (t->ioact != NULL || t->type == TPIPE || t->type == TCOPROC) {
-		e->savefd = alloc2(NUFILE, sizeof(short), ATEMP);
+		pef->savefd = alloc2(NUFILE, sizeof(short), ATEMP);
 		/* initialise to not redirected */
-		memset(e->savefd, 0, NUFILE * sizeof(short));
+		memset(pef->savefd, 0, NUFILE * sizeof(short));
 	}
 
 	/* mark for replacement later (unless TPIPE) */
@@ -169,8 +169,8 @@ execute(struct op * volatile t,
 	case TPIPE:
 		flags |= XFORK;
 		flags &= ~XEXEC;
-		e->savefd[0] = savefd(0);
-		e->savefd[1] = savefd(1);
+		pef->savefd[0] = savefd(0);
+		pef->savefd[1] = savefd(1);
 		while (t->type == TPIPE) {
 			openpipe(pv);
 			/* stdout of curr */
@@ -190,9 +190,9 @@ execute(struct op * volatile t,
 			t = t->right;
 		}
 		/* stdout of last */
-		restfd(1, e->savefd[1]);
+		restfd(1, pef->savefd[1]);
 		/* no need to re-restore this */
-		e->savefd[1] = 0;
+		pef->savefd[1] = 0;
 		/* Let exchild() close 0 in parent, after fork, before wait */
 		i = exchild(t, flags | XPCLOSE | XPIPEST, xerrok, 0);
 		if (!(flags&XBGND) && !(flags&XXCOM))
@@ -216,8 +216,8 @@ execute(struct op * volatile t,
 		 * signal handler
 		 */
 		sigprocmask(SIG_BLOCK, &sm_sigchld, &omask);
-		e->type = E_ERRH;
-		if ((i = kshsetjmp(e->jbuf))) {
+		pef->type = E_ERRH;
+		if ((i = kshsetjmp(pef->jbuf))) {
 			sigprocmask(SIG_SETMASK, &omask, NULL);
 			quitenv(NULL);
 			unwind(i);
@@ -232,8 +232,8 @@ execute(struct op * volatile t,
 		coproc_cleanup(true);
 
 		/* do this before opening pipes, in case these fail */
-		e->savefd[0] = savefd(0);
-		e->savefd[1] = savefd(1);
+		pef->savefd[0] = savefd(0);
+		pef->savefd[1] = savefd(1);
 
 		openpipe(pv);
 		if (pv[0] != 0) {
@@ -258,7 +258,7 @@ execute(struct op * volatile t,
 #ifndef MKSH_NOPROSPECTOFWORK
 		sigprocmask(SIG_SETMASK, &omask, NULL);
 		/* no more need for error handler */
-		e->type = E_EXEC;
+		pef->type = E_EXEC;
 #endif
 
 		/*
@@ -318,12 +318,12 @@ execute(struct op * volatile t,
 	case TSELECT: {
 		volatile bool is_first = true;
 
-		ap = (t->vars == NULL) ? e->loc->argv + 1 :
+		ap = (t->vars == NULL) ? pef->loc->argv + 1 :
 		    (const char **)eval((const char **)t->vars,
 		    DOBLANK | DOGLOB | DOTILDE);
-		e->type = E_LOOP;
-		while ((i = kshsetjmp(e->jbuf))) {
-			if ((e->flags&EF_BRKCONT_PASS) ||
+		pef->type = E_LOOP;
+		while ((i = kshsetjmp(pef->jbuf))) {
+			if ((pef->flags&EF_BRKCONT_PASS) ||
 			    (i != LBREAK && i != LCONTIN)) {
 				quitenv(NULL);
 				unwind(i);
@@ -354,9 +354,9 @@ execute(struct op * volatile t,
 
 	case TWHILE:
 	case TUNTIL:
-		e->type = E_LOOP;
-		while ((i = kshsetjmp(e->jbuf))) {
-			if ((e->flags&EF_BRKCONT_PASS) ||
+		pef->type = E_LOOP;
+		while ((i = kshsetjmp(pef->jbuf))) {
+			if ((pef->flags&EF_BRKCONT_PASS) ||
 			    (i != LBREAK && i != LCONTIN)) {
 				quitenv(NULL);
 				unwind(i);
@@ -618,7 +618,7 @@ comexec(struct op *t, struct tbl * volatile tp, const char **ap,
 	}
 	if (t->u.evalflags & DOTCOMEXEC)
 		flags |= XEXEC;
-	l_expand = e->loc;
+	l_expand = pef->loc;
 	if (!resetspec && (!ap[0] || (tp && (tp->flag & KEEPASN))))
 		type_flags = 0;
 	else {
@@ -627,7 +627,7 @@ comexec(struct op *t, struct tbl * volatile tp, const char **ap,
 		/* all functions keep assignments */
 		type_flags = LOCAL|LOCAL_COPY|EXPORT;
 	}
-	l_assign = e->loc;
+	l_assign = pef->loc;
 	if (exec_clrenv)
 		l_assign->flags |= BF_STOPENV;
 	if (Flag(FEXPORT))
@@ -636,9 +636,9 @@ comexec(struct op *t, struct tbl * volatile tp, const char **ap,
 		change_xtrace(2, false);
 	for (i = 0; t->vars[i]; i++) {
 		/* do NOT lookup in the new var/fn block just created */
-		e->loc = l_expand;
+		pef->loc = l_expand;
 		cp = evalstr(t->vars[i], DOASNTILDE | DOSCALAR);
-		e->loc = l_assign;
+		pef->loc = l_assign;
 		if (Flag(FXTRACE)) {
 			const char *ccp;
 
@@ -740,17 +740,17 @@ comexec(struct op *t, struct tbl * volatile tp, const char **ap,
 			kshname = ap[0];
 		else
 			ap[0] = kshname;
-		e->loc->argv = ap;
+		pef->loc->argv = ap;
 		for (i = 0; *ap++ != NULL; i++)
 			;
-		e->loc->argc = i - 1;
+		pef->loc->argc = i - 1;
 		/*
 		 * ksh-style functions handle getopts sanely,
 		 * Bourne/POSIX functions are insane...
 		 */
 		if (tp->flag & FKSH) {
-			e->loc->flags |= BF_DOGETOPTS;
-			e->loc->getopts_state = user_opt;
+			pef->loc->flags |= BF_DOGETOPTS;
+			pef->loc->getopts_state = user_opt;
 			getopts_reset(1);
 		}
 
@@ -761,8 +761,8 @@ comexec(struct op *t, struct tbl * volatile tp, const char **ap,
 		old_inuse = tp->flag & FINUSE;
 		tp->flag |= FINUSE;
 
-		e->type = E_FUNC;
-		if (!(i = kshsetjmp(e->jbuf))) {
+		pef->type = E_FUNC;
+		if (!(i = kshsetjmp(pef->jbuf))) {
 			execute(tp->val.t, flags & XERROK, NULL);
 			i = LRETURN;
 		}
@@ -1036,7 +1036,7 @@ findfunc(const char *name, uint32_t h, bool create)
 	struct block *l;
 	struct tbl *tp = NULL;
 
-	for (l = e->loc; l; l = l->next) {
+	for (l = pef->loc; l; l = l->next) {
 		tp = ktsearch(&l->funs, name, h);
 		if (tp)
 			break;
@@ -1398,7 +1398,7 @@ call_builtin(struct tbl *tp, const char **wp, const char *where, bool resetspec)
 }
 
 /*
- * set up redirection, saving old fds in e->savefd
+ * set up redirection, saving old fds in pef->savefd
  */
 static int
 iosetup(struct ioword *iop, struct tbl *tp)
@@ -1527,19 +1527,19 @@ iosetup(struct ioword *iop, struct tbl *tp)
 		return (-1);
 	}
 	/* Do not save if it has already been redirected (i.e. "cat >x >y"). */
-	if (e->savefd[iop->unit] == 0) {
+	if (pef->savefd[iop->unit] == 0) {
 		/* If these are the same, it means unit was previously closed */
 		if (u == (int)iop->unit)
-			e->savefd[iop->unit] = -1;
+			pef->savefd[iop->unit] = -1;
 		else
 			/*
-			 * c_exec() assumes e->savefd[fd] set for any
+			 * c_exec() assumes pef->savefd[fd] set for any
 			 * redirections. Ask savefd() not to close iop->unit;
 			 * this allows error messages to be seen if iop->unit
 			 * is 2; also means we can't lose the fd (eg, both
 			 * dup2 below and dup2 in restfd() failing).
 			 */
-			e->savefd[iop->unit] = savefd(iop->unit);
+			pef->savefd[iop->unit] = savefd(iop->unit);
 	}
 
 	if (do_close)
@@ -1592,7 +1592,7 @@ hereinval(struct ioword *iop, int sub, char **resbuf, struct shf *shf)
 
 	osource = source;
 	newenv(E_ERRH);
-	if (kshsetjmp(e->jbuf)) {
+	if (kshsetjmp(pef->jbuf)) {
 		source = osource;
 		quitenv(shf);
 		/* special to iosetup(): don't print error */
@@ -1639,7 +1639,7 @@ herein(struct ioword *iop, char **resbuf)
 	 * Create temp file to hold content (done before newenv
 	 * so temp doesn't get removed too soon).
 	 */
-	h = maketemp(ATEMP, TT_HEREDOC_EXP, &e->temps);
+	h = maketemp(ATEMP, TT_HEREDOC_EXP, &pef->temps);
 	if (!(shf = h->shf) || (fd = binopen3(h->tffn, O_RDONLY, 0)) < 0) {
 		i = errno;
 		warningf(true, Tf_temp,

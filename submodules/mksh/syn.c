@@ -1151,8 +1151,8 @@ yyrecursive(int subtype)
 	memcpy(ys->old_heres, heres, sizeof(heres));
 	ys->old_herep = herep;
 	herep = heres;
-	ys->next = e->yyrecursive_statep;
-	e->yyrecursive_statep = ys;
+	ys->next = pef->yyrecursive_statep;
+	pef->yyrecursive_statep = ys;
 	/* we use TPAREN as a helper container here */
 	t = nested(TPAREN, stok, etok, ALIAS);
 	yyrecursive_pop(false);
@@ -1170,9 +1170,9 @@ yyrecursive_pop(bool popall)
 	struct yyrecursive_state *ys;
 
  popnext:
-	if (!(ys = e->yyrecursive_statep))
+	if (!(ys = pef->yyrecursive_statep))
 		return;
-	e->yyrecursive_statep = ys->next;
+	pef->yyrecursive_statep = ys->next;
 
 	memcpy(heres, ys->old_heres, sizeof(heres));
 	herep = ys->old_herep;

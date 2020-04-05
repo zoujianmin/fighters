@@ -1292,7 +1292,7 @@ varsub(Expand *xp, const char *sp, const char *word,
 				} while ((vp = vp->u.array));
 				break;
 			case 1:
-				sc = e->loc->argc;
+				sc = pef->loc->argc;
 				break;
 			default:
 				p = str_val(global(sp));
@@ -1406,10 +1406,10 @@ varsub(Expand *xp, const char *sp, const char *word,
 				xp->u.strv = (const char **)XPptrv(wv);
 			}
 		} else {
-			if ((c = (e->loc->argc == 0)))
+			if ((c = (pef->loc->argc == 0)))
 				xp->var = global(sp);
 			else
-				xp->u.strv = (const char **)e->loc->argv + 1;
+				xp->u.strv = (const char **)pef->loc->argv + 1;
 			/* POSIX 2009? */
 			zero_ok = true;
 		}
@@ -2036,7 +2036,7 @@ valsub(struct op *t, Area *ap)
 	newblock();
 	if (ap)
 		vp = local("REPLY", false);
-	if (!kshsetjmp(e->jbuf))
+	if (!kshsetjmp(pef->jbuf))
 		execute(t, XXCOM | XERROK, NULL);
 	if (vp)
 		strdupx(cp, str_val(vp), ap);

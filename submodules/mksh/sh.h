@@ -821,7 +821,7 @@ typedef struct lalloc_common Area;
 
 EXTERN Area aperm;		/* permanent object space */
 #define APERM	&aperm
-#define ATEMP	&e->area
+#define ATEMP	&pef->area
 
 /*
  * flags (the order of these enums MUST match the order in misc.c(options[]))
@@ -856,7 +856,7 @@ struct yyrecursive_state;
 EXTERN struct sretrace_info *retrace_info;
 EXTERN unsigned int subshell_nesting_type;
 
-extern struct env {
+struct env {
 	ALLOC_ITEM alloc_INT;	/* internal, do not touch */
 	Area area;		/* temporary allocation area */
 	struct env *oenv;	/* link to previous environment */
@@ -868,7 +868,9 @@ extern struct env {
 	kshjmp_buf jbuf;	/* long jump back to env creator */
 	uint8_t type;		/* environment type - see below */
 	uint8_t flags;		/* EF_* */
-} *e;
+};
+
+extern struct env * pef;
 
 /* struct env.type values */
 #define E_NONE	0	/* dummy environment */
@@ -893,7 +895,7 @@ extern struct env {
 /* Do returns stop at env type e? */
 #define STOP_RETURN(t)	((t) == E_FUNC || (t) == E_INCL)
 
-/* values for kshlongjmp(e->jbuf, i) */
+/* values for kshlongjmp(pef->jbuf, i) */
 /* note that i MUST NOT be zero */
 #define LRETURN	1	/* return statement */
 #define LEXIT	2	/* exit statement */
@@ -1798,7 +1800,7 @@ EXTERN bool last_lookup_was_array;
 #define LOW_BI		BIT(14)	/* external utility overrides built-in one */
 #define DECL_UTIL	BIT(15)	/* is declaration utility */
 #define DECL_FWDR	BIT(16) /* is declaration utility forwarder */
-#define NEXTLOC_BI	BIT(17)	/* needs BF_RESETSPEC on e->loc */
+#define NEXTLOC_BI	BIT(17)	/* needs BF_RESETSPEC on pef->loc */
 
 /*
  * Attributes that can be set by the user (used to decide if an unset

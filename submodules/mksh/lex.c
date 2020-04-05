@@ -1502,7 +1502,7 @@ set_prompt(int to, Source *s)
 				current_lineno = s->line + 1;
 			saved_atemp = ATEMP;
 			newenv(E_ERRH);
-			if (kshsetjmp(e->jbuf)) {
+			if (kshsetjmp(pef->jbuf)) {
 				prompt = safe_prompt;
 				/*
 				 * Don't print an error - assume it has already

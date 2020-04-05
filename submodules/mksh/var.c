@@ -62,7 +62,7 @@ static struct tbl *vtypeset(int *, const char *, uint32_t, uint32_t, int, int);
 
 /*
  * create a new block for function calls and simple commands
- * assume caller has allocated and set up e->loc
+ * assume caller has allocated and set up pef->loc
  */
 void
 newblock(void)
@@ -72,20 +72,20 @@ newblock(void)
 
 	l = alloc(sizeof(struct block), ATEMP);
 	l->flags = 0;
-	/* TODO: could use e->area (l->area => l->areap) */
+	/* TODO: could use pef->area (l->area => l->areap) */
 	ainit(&l->area);
-	if (!e->loc) {
+	if (!pef->loc) {
 		l->argc = 0;
 		l->argv = empty;
 	} else {
-		l->argc = e->loc->argc;
-		l->argv = e->loc->argv;
+		l->argc = pef->loc->argc;
+		l->argv = pef->loc->argv;
 	}
 	l->exit = l->error = NULL;
 	ktinit(&l->area, &l->vars, 0);
 	ktinit(&l->area, &l->funs, 0);
-	l->next = e->loc;
-	e->loc = l;
+	l->next = pef->loc;
+	pef->loc = l;
 }
 
 /*
@@ -95,11 +95,11 @@ void
 popblock(void)
 {
 	ssize_t i;
-	struct block *l = e->loc;
+	struct block *l = pef->loc;
 	struct tbl *vp, **vpp = l->vars.tbls, *vq;
 
 	/* pop block */
-	e->loc = l->next;
+	pef->loc = l->next;
 
 	i = 1 << (l->vars.tshift);
 	while (--i >= 0)
@@ -191,7 +191,7 @@ array_index_calc(const char *n, bool *arrayp, uint32_t *valp)
 
 		strndupx(vn, n, p - n, ATEMP);
 		/* check if this is a reference */
-		varsearch(e->loc, &vp, vn, hash(vn));
+		varsearch(pef->loc, &vp, vn, hash(vn));
 		afree(vn, ATEMP);
 		if (vp && (vp->flag & (DEFINED | ASSOC | ARRAY)) ==
 		    (DEFINED | ASSOC)) {
@@ -244,7 +244,7 @@ isglobal(const char *n, bool docreate)
 {
 	struct tbl *vp;
 	union mksh_cchack vname;
-	struct block *l = e->loc;
+	struct block *l = pef->loc;
 	int c;
 	bool array;
 	uint32_t h, val;
@@ -307,7 +307,7 @@ isglobal(const char *n, bool docreate)
 		}
 		goto out;
 	}
-	l = varsearch(e->loc, &vp, vn, h);
+	l = varsearch(pef->loc, &vp, vn, h);
 	if (vp == NULL && docreate)
 		vp = ktenter(&l->vars, vn, h);
 	else
@@ -336,7 +336,7 @@ local(const char *n, bool copy)
 {
 	struct tbl *vp;
 	union mksh_cchack vname;
-	struct block *l = e->loc;
+	struct block *l = pef->loc;
 	bool array;
 	uint32_t h, val;
 
@@ -858,7 +858,7 @@ vtypeset(int *ep, const char *var, uint32_t set, uint32_t clr,
 			    "appending not allowed for nameref"), NULL);
 		/* find value if variable already exists */
 		if ((qval = val) == NULL) {
-			varsearch(e->loc, &vp, tvar, hash(tvar));
+			varsearch(pef->loc, &vp, tvar, hash(tvar));
 			if (vp == NULL)
 				goto nameref_empty;
 			qval = str_val(vp);
@@ -900,7 +900,7 @@ vtypeset(int *ep, const char *var, uint32_t set, uint32_t clr,
 			if (!strcmp(qval, tvar))
 				return (maybe_errorf(ep, 1, Tf_sD_s, qval,
 				    "expression recurses on parameter"), NULL);
-			varsearch(e->loc, &vp, qval, hash(qval));
+			varsearch(pef->loc, &vp, qval, hash(qval));
 			qval = NULL;
 			if (vp && ((vp->flag & (ARRAY | ASSOC)) == ASSOC))
 				qval = str_val(vp);
@@ -1174,7 +1174,7 @@ makenv(void)
 	struct tbl *vp, **vpp;
 
 	XPinit(denv, 64);
-	for (l = e->loc; l != NULL; l = l->next) {
+	for (l = pef->loc; l != NULL; l = l->next) {
 		vpp = l->vars.tbls;
 		i = 1 << (l->vars.tshift);
 		while (--i >= 0)
@@ -2098,7 +2098,7 @@ c_typeset(const char **wp)
 	/* no difference at this point.. */
 	flag = fset | fclr;
 	if (func) {
-		for (l = e->loc; l; l = l->next) {
+		for (l = pef->loc; l; l = l->next) {
 			for (p = ktsort(&l->funs); (vp = *p++); ) {
 				if (flag && (vp->flag & flag) == 0)
 					continue;
@@ -2118,7 +2118,7 @@ c_typeset(const char **wp)
 			    last_lookup_was_array ? 4 : 0, pflag, istset);
 		}
 	} else
-		c_typeset_vardump_recursive(e->loc, flag, thing, pflag, istset);
+		c_typeset_vardump_recursive(pef->loc, flag, thing, pflag, istset);
 	return (0);
 }
 

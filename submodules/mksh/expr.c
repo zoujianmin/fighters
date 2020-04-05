@@ -133,7 +133,7 @@ v_evaluate(struct tbl *vp, const char *expr, volatile int error_ok,
 	curstate.arith = arith;
 
 	newenv(E_ERRH);
-	if ((i = kshsetjmp(e->jbuf))) {
+	if ((i = kshsetjmp(pef->jbuf))) {
 		/* Clear EXPRINEVAL in of any variables we were playing with */
 		if (curstate.evaling)
 			curstate.evaling->flag &= ~EXPRINEVAL;

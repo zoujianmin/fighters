@@ -97,7 +97,7 @@ static bool initio_done;
 
 /* top-level parsing and execution environment */
 static struct env env;
-struct env *e = &env;
+struct env *pef = &env;
 
 /* compile-time assertions */
 #define cta(name, expr) struct cta_ ## name { char t[(expr) ? 1 : -1]; }
@@ -572,7 +572,7 @@ main_init(int argc, const char *argv[], Source **sp, struct block **lp)
 	    SS_RESTORE_ORIG|SS_FORCE|SS_SHTRAP);
 #endif
 
-	l = e->loc;
+	l = pef->loc;
 	if (Flag(FAS_BUILTIN)) {
 		l->argc = argc;
 		l->argv = argv;
@@ -722,18 +722,18 @@ include(const char *name, int argc, const char **argv, bool intr_ok)
 		return (-1);
 
 	if (argv) {
-		old_argv = e->loc->argv;
-		old_argc = e->loc->argc;
+		old_argv = pef->loc->argv;
+		old_argc = pef->loc->argc;
 	} else {
 		old_argv = NULL;
 		old_argc = 0;
 	}
 	newenv(E_INCL);
-	if ((i = kshsetjmp(e->jbuf))) {
+	if ((i = kshsetjmp(pef->jbuf))) {
 		quitenv(s ? s->u.shf : NULL);
 		if (old_argv) {
-			e->loc->argv = old_argv;
-			e->loc->argc = old_argc;
+			pef->loc->argv = old_argv;
+			pef->loc->argc = old_argc;
 		}
 		switch (i) {
 		case LRETURN:
@@ -760,8 +760,8 @@ include(const char *name, int argc, const char **argv, bool intr_ok)
 		}
 	}
 	if (argv) {
-		e->loc->argv = argv;
-		e->loc->argc = argc;
+		pef->loc->argv = argv;
+		pef->loc->argc = argc;
 	}
 	s = pushs(SFILE, ATEMP);
 	s->u.shf = shf;
@@ -769,8 +769,8 @@ include(const char *name, int argc, const char **argv, bool intr_ok)
 	i = shell(s, 1);
 	quitenv(s->u.shf);
 	if (old_argv) {
-		e->loc->argv = old_argv;
-		e->loc->argc = old_argc;
+		pef->loc->argv = old_argv;
+		pef->loc->argc = old_argc;
 	}
 	/* & 0xff to ensure value not -1 */
 	return (i & 0xFF);
@@ -807,10 +807,10 @@ shell(Source * volatile s, volatile int level)
 
 	newenv(level == 2 ? E_EVAL : E_PARSE);
 	if (level == 2)
-		e->flags |= EF_IN_EVAL;
+		pef->flags |= EF_IN_EVAL;
 	if (interactive)
 		really_exit = false;
-	switch ((i = kshsetjmp(e->jbuf))) {
+	switch ((i = kshsetjmp(pef->jbuf))) {
 	case 0:
 		break;
 	case LBREAK:
@@ -932,7 +932,7 @@ void
 unwind(int i)
 {
 	/* during eval, skip FERREXIT trap */
-	if (i == LERREXT && (e->flags & EF_IN_EVAL))
+	if (i == LERREXT && (pef->flags & EF_IN_EVAL))
 		goto defer_traps;
 
 	/* ordering for EXIT vs ERR is a bit odd (this is what AT&T ksh does) */
@@ -952,18 +952,18 @@ unwind(int i)
  defer_traps:
 
 	while (/* CONSTCOND */ 1) {
-		switch (e->type) {
+		switch (pef->type) {
 		case E_PARSE:
 		case E_FUNC:
 		case E_INCL:
 		case E_LOOP:
 		case E_ERRH:
 		case E_EVAL:
-			kshlongjmp(e->jbuf, i);
+			kshlongjmp(pef->jbuf, i);
 			/* NOTREACHED */
 		case E_NONE:
 			if (i == LINTR)
-				e->flags |= EF_FAKE_SIGDIE;
+				pef->flags |= EF_FAKE_SIGDIE;
 			/* FALLTHROUGH */
 		default:
 			quitenv(NULL);
@@ -986,20 +986,20 @@ newenv(int type)
 	ep = (void *)(cp - sizeof(ALLOC_ITEM));
 	/* initialise public members of struct env (not the ALLOC_ITEM) */
 	ainit(&ep->area);
-	ep->oenv = e;
-	ep->loc = e->loc;
+	ep->oenv = pef;
+	ep->loc = pef->loc;
 	ep->savefd = NULL;
 	ep->temps = NULL;
 	ep->yyrecursive_statep = NULL;
 	ep->type = type;
-	ep->flags = e->flags & EF_IN_EVAL;
-	e = ep;
+	ep->flags = pef->flags & EF_IN_EVAL;
+	pef = ep;
 }
 
 void
 quitenv(struct shf *shf)
 {
-	struct env *ep = e;
+	struct env *ep = pef;
 	char *cp;
 	int fd;
 
@@ -1074,7 +1074,7 @@ quitenv(struct shf *shf)
 		shf_close(shf);
 	reclaim();
 
-	e = e->oenv;
+	pef = pef->oenv;
 
 	/* free the struct env - tricky due to the ALLOC_ITEM inside */
 	cp = (void *)ep;
@@ -1095,7 +1095,7 @@ cleanup_parents_env(void)
 	 */
 
 	/* close all file descriptors hiding in savefd */
-	for (ep = e; ep; ep = ep->oenv) {
+	for (ep = pef; ep; ep = ep->oenv) {
 		if (ep->savefd) {
 			for (fd = 0; fd < NUFILE; fd++)
 				if (ep->savefd[fd] > 0)
@@ -1109,7 +1109,7 @@ cleanup_parents_env(void)
 #endif
 	}
 #ifndef DEBUG_LEAKS
-	e->oenv = NULL;
+	pef->oenv = NULL;
 #endif
 }
 
@@ -1119,7 +1119,7 @@ cleanup_proc_env(void)
 {
 	struct env *ep;
 
-	for (ep = e; ep; ep = ep->oenv)
+	for (ep = pef; ep; ep = ep->oenv)
 		remove_temps(ep->temps);
 }
 
@@ -1129,22 +1129,22 @@ reclaim(void)
 {
 	struct block *l;
 
-	while ((l = e->loc) && (!e->oenv || e->oenv->loc != l)) {
-		e->loc = l->next;
+	while ((l = pef->loc) && (!pef->oenv || pef->oenv->loc != l)) {
+		pef->loc = l->next;
 		afreeall(&l->area);
 	}
 
-	remove_temps(e->temps);
-	e->temps = NULL;
+	remove_temps(pef->temps);
+	pef->temps = NULL;
 
 	/*
 	 * if the memory backing source is reclaimed, things
 	 * will end up badly when a function expecting it to
 	 * be valid is run; a NULL pointer is easily debugged
 	 */
-	if (source && source->areap == &e->area)
+	if (source && source->areap == &pef->area)
 		source = NULL;
-	afreeall(&e->area);
+	afreeall(&pef->area);
 }
 
 static void

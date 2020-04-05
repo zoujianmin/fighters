@@ -1497,7 +1497,7 @@ check_job(Job *j)
 				struct env *ep;
 				int fd = 2;
 
-				for (ep = e; ep; ep = ep->oenv)
+				for (ep = pef; ep; ep = ep->oenv)
 					if (ep->savefd && ep->savefd[2])
 						fd = ep->savefd[2];
 				shf_reopen(fd, SHF_WR, shl_j);

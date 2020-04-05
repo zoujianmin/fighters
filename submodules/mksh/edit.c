@@ -494,7 +494,7 @@ x_command_glob(int flags, char *toglob, char ***wordsp)
 	glob_table(pat, &w, &keywords);
 	glob_table(pat, &w, &aliases);
 	glob_table(pat, &w, &builtins);
-	for (l = e->loc; l; l = l->next)
+	for (l = pef->loc; l; l = l->next)
 		glob_table(pat, &w, &l->funs);
 
 	glob_path(flags, pat, &w, path);
@@ -5584,7 +5584,7 @@ x_eval_region_helper(const char *cmd, size_t len)
 	char * volatile cp;
 	newenv(E_ERRH);
 
-	if (!kshsetjmp(e->jbuf)) {
+	if (!kshsetjmp(pef->jbuf)) {
 		char *wds = alloc(len + 3, ATEMP);
 
 		wds[0] = FUNASUB;
