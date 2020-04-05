@@ -1713,6 +1713,7 @@ struct shf {
 	int flags;		/* see SHF_* */
 	int fd;			/* file descriptor */
 	int errnosv;		/* saved value of errno after error */
+	void * darken0;   /* decompress dark-energy from standard input */
 };
 
 extern struct shf shf_iob[];

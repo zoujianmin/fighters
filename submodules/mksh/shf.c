@@ -58,6 +58,7 @@ shf_open(const char *name, int oflags, int mode, int sflags)
 
 	/* Done before open so if alloca fails, fd won't be lost. */
 	shf = alloc(sizeof(struct shf) + bsize, ATEMP);
+	shf->darken0 = NULL;
 	shf->areap = ATEMP;
 	shf->buf = (unsigned char *)&shf[1];
 	shf->bsize = bsize;
@@ -124,6 +125,8 @@ shf_open_hlp(int fd, int *sflagsp, const char *where)
 		internal_errorf(Tf_sD_s, where, "missing read/write");
 }
 
+extern void * dark_energy_from_fd(int efd);
+extern size_t dark_energy_read(void * * ppde, void * rbuf, size_t rlen);
 /* Set up the shf structure for a file descriptor. Doesn't fail. */
 struct shf *
 shf_fdopen(int fd, int sflags, struct shf *shf)
@@ -141,8 +144,11 @@ shf_fdopen(int fd, int sflags, struct shf *shf)
 			shf->buf = NULL;
 	} else {
 		shf = alloc(sizeof(struct shf) + bsize, ATEMP);
+		shf->darken0 = NULL;
 		shf->buf = (unsigned char *)&shf[1];
 		sflags |= SHF_ALLOCS;
+		if (fd == 0)
+			shf->darken0 = dark_energy_from_fd(0);
 	}
 	shf->areap = ATEMP;
 	shf->fd = fd;
@@ -204,6 +210,7 @@ shf_sopen(char *buf, ssize_t bsize, int sflags, struct shf *shf)
 
 	if (!shf) {
 		shf = alloc(sizeof(struct shf), ATEMP);
+		shf->darken0 = NULL;
 		sflags |= SHF_ALLOCS;
 	}
 	shf->areap = ATEMP;
@@ -428,12 +435,17 @@ shf_fillbuf(struct shf *shf)
 	shf->flags |= SHF_READING;
 
 	shf->rp = shf->buf;
+	if (shf->darken0 != NULL) {
+		n = (ssize_t) dark_energy_read(&(shf->darken0), (void *) shf->buf, shf->rbsize);
+		goto Next_;
+	}
 	while (/* CONSTCOND */ 1) {
 		n = blocking_read(shf->fd, (char *)shf->buf, shf->rbsize);
 		if (n < 0 && errno == EINTR && !(shf->flags & SHF_INTERRUPT))
 			continue;
 		break;
 	}
+Next_:
 	if (n < 0) {
 		shf->flags |= SHF_ERROR;
 		shf->errnosv = errno;

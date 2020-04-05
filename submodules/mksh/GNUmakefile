@@ -23,17 +23,20 @@ CFLAGS   := -fno-lto -Wno-deprecated-declarations -fno-asynchronous-unwind-table
 	-DHAVE_ST_MTIM=1 -DHAVE_ST_MTIMENSEC=0 -DHAVE_PERSISTENT_HISTORY=1 -DMKSH_BUILD_R=581 -O2 $(FI_CFLAGS)
 
 LDFLAGS  := -O2 -fno-lto -Wno-deprecated-declarations -fno-asynchronous-unwind-tables -fno-strict-aliasing \
-	-fstack-protector-strong -malign-data=abi -Wall -fwrapv $(FI_LDFLAGS)
+	-fstack-protector-strong -malign-data=abi -Wall -fwrapv $(FI_LDFLAGS) -llzo2
 OBJECTS  := lalloc.o edit.o eval.o exec.o expr.o funcs.o histrap.o jobs.o lex.o main.o misc.o shf.o syn.o \
-	tree.o var.o strlcpy.o
+	tree.o var.o strlcpy.o darken_un.o
 TARGETS  := mksh $(OBJECTS)
 
 .PHONY : all clean install
 
 all : $(TARGETS)
 
+darken_un.o : darken_un.c darken_head.h
+	$(CC) -I$(FI_PREFIX)/include $(FI_CFLAGS) -c -o $@ $<
+
 mksh : $(OBJECTS)
-	$(CC) $(LDFLAGS) -o mksh $(OBJECTS)
+	$(CC) -o mksh $(OBJECTS) $(LDFLAGS)
 
 %.o : %.c
 	$(CC) $(CFLAGS) -c -o $@ $<

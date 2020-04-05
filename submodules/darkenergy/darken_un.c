@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/prctl.h>
 
 #include "darken_head.h"
 #include <lzo/lzoconf.h>
@@ -278,13 +279,11 @@ again:
     if (deh.dh_newlen <= 5 ||
         deh.dh_newlen > DARKEN_HEAD_LENMAX)
         return dark_energy_part(&deh, (size_t) rl, efd, nonb);
-#if 0
-    if (deh.dh_type != DARKEN_HEAD_TYPE_SHELL)
+
+    if (deh.dh_type != DARKEN_HEAD_TYPE_SHELL && \
+        deh.dh_type != DARKEN_HEAD_TYPE_LUABC)
         return dark_energy_part(&deh, (size_t) rl, efd, nonb);
-#else
-    if (deh.dh_type != DARKEN_HEAD_TYPE_LUABC)
-        return dark_energy_part(&deh, (size_t) rl, efd, nonb);
-#endif
+
     if (deh.dh_name[DARKEN_HEAD_NAME_SIZE - 1] != '\0') {
         fprintf(stderr, "Error, invalid name byte: %#x\n",
             (unsigned int) deh.dh_name[DARKEN_HEAD_NAME_SIZE - 1]);
@@ -394,6 +393,7 @@ once_again:
     pde->pbase     = pde->head.dh_data;
     pde->offSet    = 0;
     memcpy(&(pde->head), &deh, sizeof(deh));
+    prctl(PR_SET_NAME, (unsigned long) deh.dh_name, 0, 0, 0);
     return (void *) pde;
 errMem:
     fputs("Error, cannot allocate memory!\n", stderr);
