@@ -4,19 +4,19 @@
 # == CHANGE THE SETTINGS BELOW TO SUIT YOUR ENVIRONMENT =======================
 
 # Your platform. See PLATS for possible values.
-PLAT= none
+PLAT= linux
 
 # Where to install. The installation starts in the src and doc directories,
 # so take care if INSTALL_TOP is not an absolute path. See the local target.
 # You may want to make INSTALL_LMOD and INSTALL_CMOD consistent with
 # LUA_ROOT, LUA_LDIR, and LUA_CDIR in luaconf.h.
-INSTALL_TOP= /usr/local
+INSTALL_TOP= $(FI_PREFIX)
 INSTALL_BIN= $(INSTALL_TOP)/bin
 INSTALL_INC= $(INSTALL_TOP)/include
 INSTALL_LIB= $(INSTALL_TOP)/lib
-INSTALL_MAN= $(INSTALL_TOP)/man/man1
-INSTALL_LMOD= $(INSTALL_TOP)/share/lua/$V
-INSTALL_CMOD= $(INSTALL_TOP)/lib/lua/$V
+INSTALL_MAN= $(INSTALL_TOP)/share/man/man1
+INSTALL_LMOD= $(INSTALL_TOP)/share/lua
+INSTALL_CMOD= $(INSTALL_TOP)/lib/lua
 
 # How to install. If your install program does not support "-p", then
 # you may have to run ranlib on the installed liblua.a.
@@ -41,7 +41,7 @@ PLATS= aix bsd c89 freebsd generic linux macosx mingw posix solaris
 # What to install.
 TO_BIN= lua luac
 TO_INC= lua.h luaconf.h lualib.h lauxlib.h lua.hpp
-TO_LIB= liblua.a
+TO_LIB= liblua.a liblua.so.5.3.5
 TO_MAN= lua.1 luac.1
 
 # Lua version and release.

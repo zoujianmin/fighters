@@ -4,23 +4,23 @@
 # == CHANGE THE SETTINGS BELOW TO SUIT YOUR ENVIRONMENT =======================
 
 # Your platform. See PLATS for possible values.
-PLAT= none
+PLAT= linux
 
-CC= gcc -std=gnu99
-CFLAGS= -O2 -Wall -Wextra -DLUA_COMPAT_5_2 $(SYSCFLAGS) $(MYCFLAGS)
+CC= $(FI_TCPREFIX)gcc -std=gnu99
+CFLAGS= -DLUA_COMPAT_5_2 -I. $(SYSCFLAGS) $(MYCFLAGS)
 LDFLAGS= $(SYSLDFLAGS) $(MYLDFLAGS)
 LIBS= -lm $(SYSLIBS) $(MYLIBS)
 
-AR= ar rcu
-RANLIB= ranlib
+AR= $(FI_TCPREFIX)ar rcu
+RANLIB= $(FI_TCPREFIX)ranlib
 RM= rm -f
 
 SYSCFLAGS=
 SYSLDFLAGS=
 SYSLIBS=
 
-MYCFLAGS=
-MYLDFLAGS=
+MYCFLAGS= $(FI_CFLAGS)
+MYLDFLAGS= $(FI_LDFLAGS)
 MYLIBS=
 MYOBJS=
 
@@ -29,6 +29,7 @@ MYOBJS=
 PLATS= aix bsd c89 freebsd generic linux macosx mingw posix solaris
 
 LUA_A=	liblua.a
+LUA_SO= liblua.so
 CORE_O=	lapi.o lcode.o lctype.o ldebug.o ldo.o ldump.o lfunc.o lgc.o llex.o \
 	lmem.o lobject.o lopcodes.o lparser.o lstate.o lstring.o ltable.o \
 	ltm.o lundump.o lvm.o lzio.o
@@ -43,7 +44,7 @@ LUAC_T=	luac
 LUAC_O=	luac.o
 
 ALL_O= $(BASE_O) $(LUA_O) $(LUAC_O)
-ALL_T= $(LUA_A) $(LUA_T) $(LUAC_T)
+ALL_T= $(LUA_A) $(LUA_T) $(LUAC_T) $(LUA_SO)
 ALL_A= $(LUA_A)
 
 # Targets start here.
@@ -59,14 +60,18 @@ $(LUA_A): $(BASE_O)
 	$(AR) $@ $(BASE_O)
 	$(RANLIB) $@
 
-$(LUA_T): $(LUA_O) $(LUA_A)
-	$(CC) -o $@ $(LDFLAGS) $(LUA_O) $(LUA_A) $(LIBS)
+$(LUA_SO): $(BASE_O)
+	$(CC) $(CFLAGS) -shared -o $@ -Wl,-soname=$@.5.3.5 $^ -lm -ldl
+	@mv -v $@ $@.5.3.5 && ln -sv $@.5.3.5 $@
+
+$(LUA_T): $(LUA_O) $(LUA_SO)
+	$(CC) -o $@ $(LUA_O) -llua -lreadline $(LIBS) -L./ $(LDFLAGS)
 
 $(LUAC_T): $(LUAC_O) $(LUA_A)
-	$(CC) -o $@ $(LDFLAGS) $(LUAC_O) $(LUA_A) $(LIBS)
+	$(CC) -o $@ $(LUAC_O) $(LUA_A) $(LIBS) $(LDFLAGS)
 
 clean:
-	$(RM) $(ALL_T) $(ALL_O)
+	$(RM) $(ALL_T) $(ALL_O) $(LUA_SO) $(LUA_SO).5.3.5
 
 depend:
 	@$(CC) $(CFLAGS) -MM l*.c
@@ -107,7 +112,7 @@ freebsd:
 generic: $(ALL)
 
 linux:
-	$(MAKE) $(ALL) SYSCFLAGS="-DLUA_USE_LINUX" SYSLIBS="-Wl,-E -ldl -lreadline"
+	$(MAKE) $(ALL) SYSCFLAGS="-DLUA_USE_LINUX" SYSLIBS="-Wl,-E -ldl"
 
 macosx:
 	$(MAKE) $(ALL) SYSCFLAGS="-DLUA_USE_MACOSX" SYSLIBS="-lreadline"
