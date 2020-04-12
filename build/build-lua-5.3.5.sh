@@ -9,6 +9,7 @@ fi
 lcfg='src/luaconf.h'
 if [ -n "`grep -e FI_PREFIX ${lcfg}`" ] ; then
 	sed -r -e "s#FI_PREFIX#${FI_PREFIX}/#g" -i "${lcfg}"
+	[ -z "${FI_HOST_BUILD}" ] && sed -r -e '/LUA_USE_READLINE/d' -i "${lcfg}"
 fi
 
 retv=0

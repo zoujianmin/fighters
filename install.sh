@@ -4,6 +4,7 @@
 # Configure/Compile/Install applications for GNU/Linux
 # 2020/03/22
 
+# check environment variable, `FI_RDIR
 if [ -z "${FI_RDIR}" ] ; then
 	echo "Error, environment variable \`FI_RDIR not defined." 1>&2
 	exit 1
@@ -142,22 +143,38 @@ function download_packages {
 	return 0
 }
 
+# clean up the build directory
 function clean {
+	# just remove the prepared tag-files
 	rm -rf -v "${FI_BUILDDIR}"/.*.prepared
 	return 0
 }
 
+# comple packages for host
+function build_for_host {
+	compile_package 'make-4.3.tar.gz' || exit $?
+	compile_package 'lzo-2.10.tar.gz' || exit $?
+	compile_package 'python-lzo'      || exit $?
+	compile_package 'mksh'            || exit $?
+	compile_package 'lua-5.3.5'       || exit $?
+}
+
+function build_for_target {
+	compile_package 'lzo-2.10.tar.gz' || exit $?
+	compile_package 'mksh'            || exit $?
+	compile_package 'lua-5.3.5'       || exit $?
+}
+
+# invoke operations given by command-line arguments
 if [ -n "$1" ] ; then
 	$@ ; exit $?
 fi
 
+# ensure that all the source files have downloaded
 download_packages || exit $?
-compile_package 'make-4.3.tar.gz' || exit $?
-compile_package 'lzo-2.10.tar.gz' || exit $?
-compile_package 'python-lzo'      || exit $?
-compile_package 'mksh'            || exit $?
-compile_package 'lua-5.3.5'       || exit $?
-
+if [ -n "${FI_HOST_BUILD}" ] ; then
+	build_for_host
+else
+	build_for_target
+fi
 exit 0
-
-

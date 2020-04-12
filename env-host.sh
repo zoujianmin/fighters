@@ -1,19 +1,37 @@
 #!/bin/bash
 
-# environment variables to compile for host
-
+# Fighter project directory
 export FI_RDIR="`/bin/pwd -P`"
-if [ "`echo -n ${FI_RDIR} | sed -r -e 's#\s+##'`" != "${FI_RDIR}" ] ; then
+if [ "`echo -n ${FI_RDIR} | sed -r -e 's#\s+##g'`" != "${FI_RDIR}" ] ; then
 	unset FI_RDIR # remove environment variable
 	echo "Error, white spaces not allowed in the path of fighters project" 1>&2
-else
+	sleep 86400 # sleep for a day
+	exit 1
+fi
+
+# Fighter prefix for host
+export FI_HOST_PREFIX=/opt/fight
+
+# environment variables to compile for host
+function _fight_for_host {
 	unset FI_TCPREFIX
 	unset LD_LIBRARY_PATH
 	export FI_HOST_BUILD='true'
-	export FI_PREFIX=/opt/fight
 	export FI_HOST='x86_64-linux-gnu'
-	export FI_LDFLAGS="-L${FI_PREFIX}/lib -Wl,-rpath=${FI_PREFIX}/lib"
+	export FI_PREFIX=${FI_HOST_PREFIX}
 	export FI_CFLAGS='-Wall -O2 -fPIC -D_GNU_SOURCE'
-	export PATH=/usr/bin:/usr/sbin:/bin:/sbin
-fi
+	export FI_LDFLAGS="-L${FI_PREFIX}/lib -Wl,-rpath=${FI_PREFIX}/lib"
+	export PATH="${FI_RDIR}/host/bin:/usr/bin:/usr/sbin:/bin:/sbin"
+}
+
+function _fight_for_armv7 {
+	unset FI_HOST_BUILD
+	unset LD_LIBRARY_PATH
+	export FI_TCPREFIX=arm-linux-gnueabihf-
+	export FI_HOST='arm-linux-gnueabihf'
+	export FI_PREFIX=/system/fight
+	export FI_LDFLAGS="-L${FI_PREFIX}/lib -Wl,-rpath=${FI_PREFIX}/lib"
+	export FI_CFLAGS='-march=armv7-a -mfpu=neon-vfpv4 -Wall -O2 -fPIC -D_GNU_SOURCE'
+	export PATH="${FI_HOST_PREFIX}/bin:${FI_RDIR}/host/bin:/usr/bin:/usr/sbin:/bin:/sbin"
+}
 

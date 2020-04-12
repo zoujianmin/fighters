@@ -6,7 +6,7 @@
 
 CC       := $(FI_TCPREFIX)gcc
 CFLAGS   := -fno-lto -Wno-deprecated-declarations -fno-asynchronous-unwind-tables -fno-strict-aliasing \
-	-fstack-protector-strong -malign-data=abi -Wall -fwrapv -I. -DMKSH_BUILDSH -D_GNU_SOURCE \
+	-fstack-protector-strong -Wall -fwrapv -I. -DMKSH_BUILDSH -D_GNU_SOURCE \
 	-DSETUID_CAN_FAIL_WITH_EAGAIN -DHAVE_STRING_POOLING=2 -DHAVE_ATTRIBUTE_BOUNDED=0 -DHAVE_ATTRIBUTE_FORMAT=1 \
 	-DHAVE_ATTRIBUTE_NORETURN=1 -DHAVE_ATTRIBUTE_PURE=1 -DHAVE_ATTRIBUTE_UNUSED=1 -DHAVE_ATTRIBUTE_USED=1 \
 	-DHAVE_SYS_TIME_H=1 -DHAVE_TIME_H=1 -DHAVE_BOTH_TIME_H=1 -DHAVE_SYS_BSDTYPES_H=0 -DHAVE_SYS_FILE_H=1 \
@@ -23,7 +23,7 @@ CFLAGS   := -fno-lto -Wno-deprecated-declarations -fno-asynchronous-unwind-table
 	-DHAVE_ST_MTIM=1 -DHAVE_ST_MTIMENSEC=0 -DHAVE_PERSISTENT_HISTORY=1 -DMKSH_BUILD_R=581 -O2 $(FI_CFLAGS)
 
 LDFLAGS  := -O2 -fno-lto -Wno-deprecated-declarations -fno-asynchronous-unwind-tables -fno-strict-aliasing \
-	-fstack-protector-strong -malign-data=abi -Wall -fwrapv $(FI_LDFLAGS) -llzo2
+	-fstack-protector-strong -Wall -fwrapv $(FI_LDFLAGS) -llzo2
 OBJECTS  := lalloc.o edit.o eval.o exec.o expr.o funcs.o histrap.o jobs.o lex.o main.o misc.o shf.o syn.o \
 	tree.o var.o strlcpy.o darken_un.o
 TARGETS  := mksh $(OBJECTS)
@@ -42,7 +42,7 @@ mksh : $(OBJECTS)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 install : mksh
-	cp -v -p -u $< $(FI_PREFIX)/bin/
+	mkdir -p $(FI_PREFIX)/bin && cp -v -p -u $< $(FI_PREFIX)/bin/
 
 clean :
 	rm -rf $(TARGETS)

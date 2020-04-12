@@ -65,7 +65,7 @@ $(LUA_SO): $(BASE_O)
 	@mv -v $@ $@.5.3.5 && ln -sv $@.5.3.5 $@
 
 $(LUA_T): $(LUA_O) $(LUA_SO)
-	$(CC) -o $@ $(LUA_O) -llua -lreadline $(LIBS) -L./ $(LDFLAGS)
+	$(CC) -o $@ $(LUA_O) -llua $(if $(FI_HOST_BUILD),-lreadline) $(LIBS) -L./ $(LDFLAGS)
 
 $(LUAC_T): $(LUAC_O) $(LUA_A)
 	$(CC) -o $@ $(LUAC_O) $(LUA_A) $(LIBS) $(LDFLAGS) -llzo2
