@@ -200,7 +200,7 @@
 
 #else			/* }{ */
 
-#define LUA_ROOT	"/usr/local/"
+#define LUA_ROOT	"FI_PREFIX"
 #define LUA_LDIR	LUA_ROOT "share/lua/"
 #define LUA_CDIR	LUA_ROOT "lib/lua/"
 #define LUA_PATH_DEFAULT  \
