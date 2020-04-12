@@ -72,7 +72,7 @@ function download_source {
 	return 0
 }
 
-function comple_package {
+function compile_package {
 	local srcDir=""
 	local pkgName="$1"
 	cd "${FI_BUILDDIR}" || return 1 # goto project build directory
@@ -152,10 +152,11 @@ if [ -n "$1" ] ; then
 fi
 
 download_packages || exit $?
-comple_package 'make-4.3.tar.gz' || exit $?
-comple_package 'lzo-2.10.tar.gz' || exit $?
-comple_package 'python-lzo'      || exit $?
-comple_package 'mksh'            || exit $?
+compile_package 'make-4.3.tar.gz' || exit $?
+compile_package 'lzo-2.10.tar.gz' || exit $?
+compile_package 'python-lzo'      || exit $?
+compile_package 'mksh'            || exit $?
+compile_package 'lua-5.3.5'       || exit $?
 
 exit 0
 
