@@ -633,11 +633,16 @@ LUALIB_API void luaL_unref (lua_State *L, int t, int ref) {
 */
 
 typedef struct LoadF {
+  void * darken0;
   int n;  /* number of pre-read characters */
   FILE *f;  /* file being read */
   char buff[BUFSIZ];  /* area for reading file */
 } LoadF;
 
+extern void * dark_energy_from_fd(int efd);
+extern int dark_energy_getc(void * * ppde);
+extern int dark_energy_feof(void * * ppde);
+extern size_t dark_energy_read(void * * ppde, void * rbuf, size_t rlen);
 
 static const char *getF (lua_State *L, void *ud, size_t *size) {
   LoadF *lf = (LoadF *)ud;
@@ -650,8 +655,13 @@ static const char *getF (lua_State *L, void *ud, size_t *size) {
     /* 'fread' can return > 0 *and* set the EOF flag. If next call to
        'getF' called 'fread', it might still wait for user input.
        The next check avoids this problem. */
-    if (feof(lf->f)) return NULL;
-    *size = fread(lf->buff, 1, sizeof(lf->buff), lf->f);  /* read block */
+    if (lf->darken0 != NULL) {
+      if (dark_energy_feof(&(lf->darken0)) != 0) return NULL;
+      *size = dark_energy_read(&(lf->darken0), lf->buff, sizeof(lf->buff));
+    } else {
+      if (feof(lf->f)) return NULL;
+      *size = fread(lf->buff, 1, sizeof(lf->buff), lf->f);  /* read block */
+    }
   }
   return lf->buff;
 }
@@ -671,11 +681,19 @@ static int skipBOM (LoadF *lf) {
   int c;
   lf->n = 0;
   do {
-    c = getc(lf->f);
+    void * darken0 = lf->darken0;
+    if (darken0 != NULL) {
+      c = dark_energy_getc(&darken0);
+      if (darken0 == NULL)
+        lf->darken0 = NULL;
+    } else
+      c = getc(lf->f);
     if (c == EOF || c != *(const unsigned char *)p++) return c;
     lf->buff[lf->n++] = c;  /* to be read by the parser */
   } while (*p != '\0');
   lf->n = 0;  /* prefix matched; discard it */
+  if (lf->darken0 != NULL)
+    return dark_energy_getc(&(lf->darken0));
   return getc(lf->f);  /* return next character */
 }
 
@@ -691,9 +709,16 @@ static int skipcomment (LoadF *lf, int *cp) {
   int c = *cp = skipBOM(lf);
   if (c == '#') {  /* first line is a comment (Unix exec. file)? */
     do {  /* skip first line */
-      c = getc(lf->f);
+      void * darken0 = lf->darken0;
+      if (darken0 != NULL) {
+        c = dark_energy_getc(&darken0);
+        if (darken0 == NULL)
+          lf->darken0 = NULL;
+      } else
+        c = getc(lf->f);
     } while (c != EOF && c != '\n');
-    *cp = getc(lf->f);  /* skip end-of-line, if present */
+    /* skip end-of-line, if present */
+    *cp = (lf->darken0 != NULL) ? dark_energy_getc(&(lf->darken0)) : getc(lf->f);
     return 1;  /* there was a comment */
   }
   else return 0;  /* no comment */
@@ -709,8 +734,10 @@ LUALIB_API int luaL_loadfilex (lua_State *L, const char *filename,
   if (filename == NULL) {
     lua_pushliteral(L, "=stdin");
     lf.f = stdin;
+    lf.darken0 = dark_energy_from_fd(0);
   }
   else {
+    lf.darken0 = NULL;
     lua_pushfstring(L, "@%s", filename);
     lf.f = fopen(filename, "r");
     if (lf.f == NULL) return errfile(L, "open", fnameindex);

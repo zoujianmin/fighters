@@ -19,7 +19,7 @@ SYSCFLAGS=
 SYSLDFLAGS=
 SYSLIBS=
 
-MYCFLAGS= $(FI_CFLAGS)
+MYCFLAGS= $(FI_CFLAGS) -I$(FI_PREFIX)/include
 MYLDFLAGS= $(FI_LDFLAGS)
 MYLIBS=
 MYOBJS=
@@ -28,13 +28,13 @@ MYOBJS=
 
 PLATS= aix bsd c89 freebsd generic linux macosx mingw posix solaris
 
-LUA_A=	liblua.a
+LUA_A=	liblua53.a
 LUA_SO= liblua.so
 CORE_O=	lapi.o lcode.o lctype.o ldebug.o ldo.o ldump.o lfunc.o lgc.o llex.o \
 	lmem.o lobject.o lopcodes.o lparser.o lstate.o lstring.o ltable.o \
 	ltm.o lundump.o lvm.o lzio.o
 LIB_O=	lauxlib.o lbaselib.o lbitlib.o lcorolib.o ldblib.o liolib.o \
-	lmathlib.o loslib.o lstrlib.o ltablib.o lutf8lib.o loadlib.o linit.o
+	lmathlib.o loslib.o lstrlib.o ltablib.o lutf8lib.o loadlib.o linit.o darken_un.o
 BASE_O= $(CORE_O) $(LIB_O) $(MYOBJS)
 
 LUA_T=	lua
@@ -61,14 +61,14 @@ $(LUA_A): $(BASE_O)
 	$(RANLIB) $@
 
 $(LUA_SO): $(BASE_O)
-	$(CC) $(CFLAGS) -shared -o $@ -Wl,-soname=$@.5.3.5 $^ -lm -ldl
+	$(CC) $(CFLAGS) -shared -o $@ -Wl,-soname=$@.5.3.5 $^ $(FI_LDFLAGS) -llzo2 -lm -ldl
 	@mv -v $@ $@.5.3.5 && ln -sv $@.5.3.5 $@
 
 $(LUA_T): $(LUA_O) $(LUA_SO)
 	$(CC) -o $@ $(LUA_O) -llua -lreadline $(LIBS) -L./ $(LDFLAGS)
 
 $(LUAC_T): $(LUAC_O) $(LUA_A)
-	$(CC) -o $@ $(LUAC_O) $(LUA_A) $(LIBS) $(LDFLAGS)
+	$(CC) -o $@ $(LUAC_O) $(LUA_A) $(LIBS) $(LDFLAGS) -llzo2
 
 clean:
 	$(RM) $(ALL_T) $(ALL_O) $(LUA_SO) $(LUA_SO).5.3.5
