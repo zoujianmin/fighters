@@ -29,4 +29,8 @@ while [ -n "$1" ] ; do
 	shift 1
 	let "idx++"
 done
+if [ -n "${DEOUTPFD}" ] ; then
+	echo "\`DEOUTPFD: ${DEOUTPFD}"
+	echo 'What the hell?' 1>&${DEOUTPFD}
+fi
 exit 8

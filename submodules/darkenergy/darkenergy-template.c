@@ -17,17 +17,20 @@ extern const unsigned char DARKEN_SYMBOL[];
 
 int main(int argc, char *argv[])
 {
+	int rlen;
 	const void * pde;
 	struct dark_energy * de;
 	const char * args = "what the fuck";
 
+	rlen = 0;
 	pde = darken_find(DARKEN_SYMBOL, DARKEN_IDX_TEMPLATE);
 	if (pde == NULL)
 		exit(90);
 	de = darken_run(pde, args, (int) strlen(args), DARKEN_OUTPUT);
 	if (de == NULL)
 		exit(91);
-	if (de->de_out != NULL && de->de_len > 0) {
+	darken_output(de, &rlen);
+	if (darken_has_output(de)) {
 		fprintf(stdout, "output from child process:\n%s",
 			(const char *) de->de_out);
 		fflush(stdout);

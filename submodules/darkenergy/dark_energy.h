@@ -74,6 +74,15 @@ int darken_has_child(long pidc);
  */
 const void * darken_output(struct dark_energy * cde, int * outLen);
 
+/*
+ * check if the darken has valid output
+ */
+static inline int darken_has_output(const struct dark_energy * pde)
+{
+	return (pde->de_out != NULL) && (pde->de_len > 0);
+}
+
+
 #define DARKEN_EXEC_ARGS       8
 struct dark_exec {
     long                       de_pid;       /* pid of child process */

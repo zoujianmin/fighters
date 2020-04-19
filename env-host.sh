@@ -11,6 +11,8 @@ fi
 
 # Fighter prefix for host
 export FI_HOST_PREFIX=/opt/fight
+# for loading of python-lzo module
+export PYTHONPATH=${FI_HOST_PREFIX}/lib/python3
 
 # environment variables to compile for host
 function _fight_for_host {
