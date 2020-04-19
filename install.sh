@@ -140,7 +140,7 @@ function download_packages {
 		'c0f892943208266f9b6543b3ae308fab6284c5c90e627931446fb49b4221a072'
 	retv=$? ; [ ${retv} -ne 0 ] && return ${retv}
 
-	download_source "http://mirrors.ustc.edu.cn/gnu/bash" "bash-5.0.tar.gz" \
+	download_source "${GNU_URL}/bash" "bash-5.0.tar.gz" \
 		'b4a80f2ac66170b2913efbfb9f2594f1f76c7b1afd11f799e22035d63077fb4d'
 	retv=$? ; [ ${retv} -ne 0 ] && return ${retv}
 

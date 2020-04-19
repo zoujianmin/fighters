@@ -8,7 +8,7 @@
 CC       := $(FI_TCPREFIX)gcc
 CFLAGS   := -I. -I$(FI_PREFIX)/include $(FI_CFLAGS)
 LDFLAGS  := $(FI_LDFLAGS)
-TARGETS  := darken_un.o libdarken.so template
+TARGETS  := darken_un.o libdarken.so template sysp.so
 
 .PHONY : all clean install
 
@@ -27,12 +27,16 @@ template.o : template.sh
 libdarken.so : dark_energy.o
 	$(CC) -shared -o $@ $< $(LDFLAGS) -Wl,-soname=$@
 
+sysp.so : sysp.c
+	$(CC) $(CFLAGS) -shared -o $@ -Wl,-soname=$@ $< $(LDFLAGS) -llua
+
 %.o : %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 install : all
 	mkdir -p -v $(FI_PREFIX)/include && cp -v -u dark_energy.h $(FI_PREFIX)/include/
 	mkdir -p -v $(FI_PREFIX)/lib && cp -v -u libdarken.so $(FI_PREFIX)/lib/
+	mkdir -p -v $(FI_PREFIX)/lib/lua && cp -v -u sysp.so ${FI_PREFIX}/lib/lua/
 
 clean :
 	rm -rf *.o $(TARGETS)
