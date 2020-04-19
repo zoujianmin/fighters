@@ -543,6 +543,7 @@ pid_t darken_run_fork(const struct darken_head * dh, const void * wdata,
     int dataLen, int * pcwfd_, int optrun)
 {
 	pid_t newp;
+	size_t wl0;
     ssize_t rl1;
     int crfds[2], * pcrfd;
     int cwfds[2], * pcwfd;
@@ -572,8 +573,9 @@ pid_t darken_run_fork(const struct darken_head * dh, const void * wdata,
 		return newp;
 	}
 
+	wl0 = dh->dh_newlen + sizeof(struct darken_head);
 	/* modify pipe sizes */
-    if (darken_pipe_size(stdfd0[1], (int) dh->dh_newlen) < 0) {
+    if (darken_pipe_size(stdfd0[1], (int) wl0) < 0) {
         close_fds(pcrfd);
         close_fds(pcwfd);
         close_fds(stdfd0);
@@ -581,8 +583,8 @@ pid_t darken_run_fork(const struct darken_head * dh, const void * wdata,
     }
 
     /* write the compressed script to pipe */
-    rl1 = write(stdfd0[1], dh->dh_data, (size_t) dh->dh_newlen);
-    if (rl1 != (ssize_t) dh->dh_newlen) {
+    rl1 = write(stdfd0[1], dh, wl0);
+    if (rl1 != (ssize_t) wl0) {
         err_n = errno;
 		close_fds(pcrfd);
 		close_fds(pcwfd);

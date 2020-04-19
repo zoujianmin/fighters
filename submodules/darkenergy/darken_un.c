@@ -176,7 +176,7 @@ size_t dark_energy_read(void * * ppde, void * rbuf, size_t rlen)
 
 static int dark_energy_block(int dfd, int enable)
 {
-    long flags;
+    int flags;
     int ret, err_n, rval;
 
     ret = fcntl(dfd, F_GETFL, 0);
@@ -190,13 +190,13 @@ err0:
         return -1;
     }
 
-    flags = (long) ret;
-    rval = (ret & O_NONBLOCK) != 0;
+    flags = ret;
+    rval = (ret & O_NONBLOCK) == 0;
     if (enable)
-        flags |= O_NONBLOCK;
-    else
         flags &= ~O_NONBLOCK;
-    if (flags == (long) ret)
+    else
+        flags |= O_NONBLOCK;
+    if (flags == ret)
         return rval;
     ret = fcntl(dfd, F_SETFL, flags);
     if (ret < 0)
@@ -246,7 +246,7 @@ void * dark_energy_from_fd(int efd)
         return NULL;
 
     /* enable blocked I/O */
-    nonb = dark_energy_block(efd, 0);
+    nonb = dark_energy_block(efd, 1);
     if (nonb < 0)
         return NULL;
 

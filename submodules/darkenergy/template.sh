@@ -10,7 +10,7 @@ read_argv() {
 		return 1 # no argument file descriptor given
 	fi
 	local argv=""
-	read "-u{DEARGVFD}" -N -1 argv
+	read "-u${DEARGVFD}" -N -1 argv
 	if [ -z "${argv}" ] ; then
 		echo "Error, failed to read from \"${DEARGVFD}\"" 1>&2
 		unset DEARGVFD
