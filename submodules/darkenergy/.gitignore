@@ -1,2 +1,5 @@
 *.o
 *.fz
+/libdarken.so
+/template
+/template.h
