@@ -27,11 +27,24 @@ function _fight_for_host {
 function _fight_for_armv7 {
 	unset FI_HOST_BUILD
 	unset LD_LIBRARY_PATH
-	export FI_TCPREFIX=arm-linux-gnueabihf-
 	export FI_HOST='arm-linux-gnueabihf'
-	export FI_PREFIX=/system/fight
+	export FI_TCPREFIX="${FI_HOST}-"
+	export FI_PREFIX='/system/fight32'
 	export FI_LDFLAGS="-L${FI_PREFIX}/lib -Wl,-rpath=${FI_PREFIX}/lib"
 	export FI_CFLAGS='-march=armv7-a -mfpu=neon-vfpv4 -Wall -O2 -fPIC -D_GNU_SOURCE'
-	export PATH="${FI_HOST_PREFIX}/bin:${FI_RDIR}/host/bin:/usr/bin:/usr/sbin:/bin:/sbin"
+	local toolchain='/opt/gcc-linaro-7.5.0-2019.12-x86_64_arm-linux-gnueabihf'
+	export PATH="${toolchain}/bin:${FI_HOST_PREFIX}/bin:${FI_RDIR}/host/bin:/usr/bin:/usr/sbin:/bin:/sbin"
+}
+
+function _fight_for_armv8 {
+	unset FI_HOST_BUILD
+	unset LD_LIBRARY_PATH
+	export FI_HOST='aarch64-linux-gnu'
+	export FI_TCPREFIX="${FI_HOST}-"
+	export FI_PREFIX='/system/fight64'
+	export FI_CFLAGS='-Wall -O2 -fPIC -D_GNU_SOURCE'
+	export FI_LDFLAGS="-L${FI_PREFIX}/lib -Wl,-rpath=${FI_PREFIX}/lib"
+	local toolchain='/opt/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu'
+	export PATH="${toolchain}/bin:${FI_HOST_PREFIX}/bin:${FI_RDIR}/host/bin:/usr/bin:/usr/sbin:/bin:/sbin"
 }
 

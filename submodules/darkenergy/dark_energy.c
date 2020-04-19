@@ -612,7 +612,7 @@ pid_t darken_run_fork(const struct darken_head * dh, const void * wdata,
 
 	newp = 0;
 	if ((optrun & DARKEN_NOFORK) == 0)
-		newp = fork();
+		newp = vfork();
 	if (newp < 0) {
 		err_n = errno;
 		close_fds(pcrfd);

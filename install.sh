@@ -157,12 +157,14 @@ function build_for_host {
 	compile_package 'python-lzo'      || exit $?
 	compile_package 'mksh'            || exit $?
 	compile_package 'lua-5.3.5'       || exit $?
+	compile_package 'darkenergy'      || exit $?
 }
 
 function build_for_target {
 	compile_package 'lzo-2.10.tar.gz' || exit $?
 	compile_package 'mksh'            || exit $?
 	compile_package 'lua-5.3.5'       || exit $?
+	compile_package 'darkenergy'      || exit $?
 }
 
 # invoke operations given by command-line arguments
