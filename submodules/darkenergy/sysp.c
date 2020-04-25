@@ -336,7 +336,37 @@ static const luaL_Reg sysp_regs[] = {
 
 int luaopen_sysp(lua_State * L)
 {
-	luaL_newlib(L, sysp_regs);
+	luaL_checkversion(L);
+	lua_createtable(L, 0, 11);
+	luaL_setfuncs(L, sysp_regs, 0);
+
+	/* 1 */
+	lua_pushinteger(L, SYSP_SYSTEM_OUTPUT);
+	lua_setfield(L, -2, "SYSTEM_OUTPUT");
+
+	/* 2 */
+	lua_pushinteger(L, SYSP_SYSTEM_NOWAIT);
+	lua_setfield(L, -2, "SYSTEM_NOWAIT");
+
+	/* 3 */
+	lua_pushinteger(L, SYSP_SYSTEM_NOSTDIO);
+	lua_setfield(L, -2, "SYSTEM_NOSTDIO");
+
+	/* 4 */
+	lua_pushinteger(L, SYSP_MIN_BUFSIZE);
+	lua_setfield(L, -2, "MIN_BUFSIZE");
+
+	/* 5 */
+	lua_pushinteger(L, SYSP_MAX_BUFSIZE);
+	lua_setfield(L, -2, "MAX_BUFSIZE");
+
+	/* 6 */
+	lua_pushinteger(L, SYSP_WAIT_NOHANG);
+	lua_setfield(L, -2, "WAIT_NOHANG");
+
+	/* 7 */
+	lua_pushinteger(L, SYSP_WAIT_AWHILE);
+	lua_setfield(L, -2, "WAIT_AWHILE");
 	return 1;
 }
 
