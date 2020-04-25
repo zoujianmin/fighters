@@ -23,7 +23,7 @@ function _fight_for_host {
 	export FI_PREFIX=${FI_HOST_PREFIX}
 	export FI_CFLAGS='-Wall -O2 -fPIC -D_GNU_SOURCE'
 	export FI_LDFLAGS="-L${FI_PREFIX}/lib -Wl,-rpath=${FI_PREFIX}/lib"
-	export PATH="${FI_RDIR}/host/bin:/usr/bin:/usr/sbin:/bin:/sbin"
+	export PATH="${FI_RDIR}/host/bin:/bin:/sbin:/usr/bin:/usr/sbin"
 }
 
 function _fight_for_armv7 {
@@ -35,7 +35,7 @@ function _fight_for_armv7 {
 	export FI_LDFLAGS="-L${FI_PREFIX}/lib -Wl,-rpath=${FI_PREFIX}/lib"
 	export FI_CFLAGS='-march=armv7-a -mfpu=neon-vfpv4 -Wall -O2 -fPIC -D_GNU_SOURCE'
 	local toolchain='/opt/gcc-linaro-7.5.0-2019.12-x86_64_arm-linux-gnueabihf'
-	export PATH="${toolchain}/bin:${FI_HOST_PREFIX}/bin:${FI_RDIR}/host/bin:/usr/bin:/usr/sbin:/bin:/sbin"
+	export PATH="${toolchain}/bin:${FI_HOST_PREFIX}/bin:${FI_RDIR}/host/bin:/bin:/sbin:/usr/bin:/usr/sbin"
 }
 
 function _fight_for_armv8 {
@@ -47,6 +47,6 @@ function _fight_for_armv8 {
 	export FI_CFLAGS='-Wall -O2 -fPIC -D_GNU_SOURCE'
 	export FI_LDFLAGS="-L${FI_PREFIX}/lib -Wl,-rpath=${FI_PREFIX}/lib"
 	local toolchain='/opt/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu'
-	export PATH="${toolchain}/bin:${FI_HOST_PREFIX}/bin:${FI_RDIR}/host/bin:/usr/bin:/usr/sbin:/bin:/sbin"
+	export PATH="${toolchain}/bin:${FI_HOST_PREFIX}/bin:${FI_RDIR}/host/bin:/bin:/sbin:/usr/bin:/usr/sbin"
 }
 
