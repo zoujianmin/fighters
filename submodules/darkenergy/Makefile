@@ -39,5 +39,5 @@ install : all
 	mkdir -p -v $(FI_PREFIX)/lib/lua && cp -v -u sysp.so ${FI_PREFIX}/lib/lua/
 
 clean :
-	rm -rf *.o $(TARGETS)
+	rm -rf *.o $(TARGETS) *.fz template.h
 

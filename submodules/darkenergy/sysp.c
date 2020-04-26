@@ -58,7 +58,7 @@ static int sysp_system(lua_State * L)
 	}
 
 	/* check the type of first argument */
-	if (lua_type(L, 1) != LUA_TNUMBER) {
+	if (lua_isinteger(L, 0x1) == 0) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid type of system flag");
 		return 2;
@@ -86,12 +86,11 @@ static int sysp_system(lua_State * L)
 	argc = 0; /* number of string arguments */
 	typi = lua_type(L, 2);
 	if (typi == LUA_TSTRING) {
-		int idx, typj;
+		int idx;
 		for (idx = 2; idx <= ntop; ++idx) {
-			typj = lua_type(L, idx);
-			if (typj != LUA_TSTRING) {
+			if (lua_isstring(L, idx) == 0) {
 				lua_pushnil(L);
-				lua_pushfstring(L, "invalid type of argument[%d]: %d", idx, typj);
+				lua_pushfstring(L, "not string at [%d]", idx);
 				return 2;
 			}
 			argv[argc] = lua_tolstring(L, idx, NULL);
@@ -209,7 +208,7 @@ static int sysp_waitpid_(lua_State * L)
 
 	rpid = -1;
 	isInt = 0;
-	if (lua_type(L, 1) == LUA_TNUMBER)
+	if (lua_isinteger(L, 0x1))
 		rpid = (pid_t) lua_tointegerx(L, 0x1, &isInt);
 	if (isInt == 0 || rpid <= 0) {
 		lua_pushnil(L);
@@ -218,7 +217,7 @@ static int sysp_waitpid_(lua_State * L)
 	}
 
 	isInt = flags = 0;
-	if (lua_type(L, 2) == LUA_TNUMBER)
+	if (lua_isinteger(L, 0x2))
 		flags = (int) lua_tointegerx(L, 0x2, &isInt);
 	if (isInt == 0) {
 		lua_pushnil(L);
@@ -260,7 +259,7 @@ static int sysp_close_(lua_State *L)
 	jdx = 0;
 	for (idx = 0x1; idx <= ntop; ++idx) {
 		int isInt;
-		if (lua_type(L, idx) != LUA_TNUMBER)
+		if (lua_isinteger(L, idx) == 0)
 			continue;
 
 		isInt = 0;
@@ -291,7 +290,7 @@ static int sysp_read_(lua_State * L)
 	}
 
 	ret = pfd = 0;
-	if (lua_type(L, 0x1) == LUA_TNUMBER)
+	if (lua_isinteger(L, 0x1))
 		pfd = (int) lua_tointegerx(L, 0x1, &ret);
 	if (ret == 0 || pfd < 0) {
 		lua_pushnil(L);
@@ -300,7 +299,7 @@ static int sysp_read_(lua_State * L)
 	}
 
 	ret = readLen = 0;
-	if (lua_type(L, 0x2) == LUA_TNUMBER)
+	if (lua_isinteger(L, 0x2))
 		readLen = (int) lua_tointegerx(L, 0x2, &ret);
 	if (ret == 0 || readLen <= 0 || readLen > SYSP_MAX_BUFSIZE) {
 		lua_pushnil(L);
