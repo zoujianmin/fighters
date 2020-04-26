@@ -29,7 +29,7 @@
 #include <sys/sysctl.h>
 #endif
 
-__RCSID("$MirOS: src/bin/mksh/var.c,v 1.234 2019/12/30 04:49:31 tg Exp $");
+__RCSID("$MirOS: src/bin/mksh/var.c,v 1.236 2020/04/13 16:29:34 tg Exp $");
 
 /*-
  * Variables
@@ -909,7 +909,7 @@ vtypeset(int *ep, const char *var, uint32_t set, uint32_t clr,
 
 	/* prevent typeset from creating a local PATH/ENV/SHELL */
 	if (Flag(FRESTRICTED) && (strcmp(tvar, TPATH) == 0 ||
-	    strcmp(tvar, "ENV") == 0 || strcmp(tvar, TSHELL) == 0))
+	    strcmp(tvar, TENV) == 0 || strcmp(tvar, TSHELL) == 0))
 		return (maybe_errorf(ep, 1, Tf_sD_s,
 		    tvar, "restricted"), NULL);
 
@@ -1862,7 +1862,7 @@ record_match(const char *istr)
 	setstr(vp, istr, 0x4);
 }
 
-/* typeset, global(deprecated), export, and readonly */
+/* typeset, export and readonly */
 int
 c_typeset(const char **wp)
 {

@@ -1,4 +1,4 @@
-# $MirOS: src/bin/mksh/check.t,v 1.834 2020/03/29 23:52:00 tg Exp $
+# $MirOS: src/bin/mksh/check.t,v 1.839 2020/04/15 20:16:15 tg Exp $
 # -*- mode: sh -*-
 #-
 # Copyright © 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
@@ -31,7 +31,7 @@
 # (2013/12/02 20:39:44) http://cvsweb.openbsd.org/cgi-bin/cvsweb/src/regress/bin/ksh/?sortby=date
 
 expected-stdout:
-	KSH R58 2020/03/27
+	KSH R59 2020/04/15
 description:
 	Check base version of full shell
 stdin:
@@ -7618,7 +7618,7 @@ stdin:
 	showargs 18 "$a"
 	set -A bla
 	typeset bla[1]=~:~
-	global gbl=~ g2=$1
+	typeset -g gbl=~ g2=$1
 	local lcl=~ l2=$1
 	readonly ro=~ r2=$1
 	showargs 19 "${bla[1]}" a=~ "$gbl" "$lcl" "$ro" "$g2" "$l2" "$r2"
@@ -8077,6 +8077,50 @@ expected-stdout:
 	ja
 	nein
 expected-stderr-pattern: !/unexpected op/
+---
+name: test-str-pattern
+description:
+	Check that [[ x = $y ]] can take extglobs, like ksh93
+stdin:
+	x='a\'
+	[[ $x = a\  ]]; echo 1 $? .
+	[[ $x = a\\  ]]; echo 2 $? .
+	y='a\'
+	[[ $x = $y ]]; echo 3 $? .
+	[[ $x = "$y" ]]; echo 4 $? .
+	x='a\b'
+	y='a\b'
+	[[ $x = $y ]]; echo 5 $? .
+	[[ $x = "$y" ]]; echo 6 $? .
+	y='a\\b'
+	[[ $x = $y ]]; echo 7 $? .
+	[[ $x = "$y" ]]; echo 8 $? .
+	x='foo'
+	y='f+(o)'
+	[[ $x = $y ]]; echo 9 $? .
+	[[ $x = "$y" ]]; echo 10 $? .
+	x=$y
+	[[ $x = $y ]]; echo 11 $? .
+	[[ $x = "$y" ]]; echo 12 $? .
+	x='f+(o'
+	y=$x
+	[[ $x = $y ]]; echo 13 $? .
+	[[ $x = "$y" ]]; echo 14 $? .
+expected-stdout:
+	1 1 .
+	2 0 .
+	3 0 .
+	4 0 .
+	5 1 .
+	6 0 .
+	7 0 .
+	8 1 .
+	9 0 .
+	10 1 .
+	11 1 .
+	12 0 .
+	13 0 .
+	14 0 .
 ---
 name: test-precedence-1
 description:
@@ -13520,13 +13564,17 @@ description:
 stdin:
 	PATH=/bin:/usr/bin
 	alias foo="bar baz"
+	alias '[ab]=:'
 	bar() { :; }
-	for word in 'if' 'foo' 'bar' 'set' 'true'; do
+	for word in 'if' 'foo' 'bar' 'set' 'true' '[ab]'; do
 		command -v "$word"
 		command -pv "$word"
 		command -V "$word"
 		command -pV "$word"
 	done
+	# extra checks
+	alias '[ab]'
+	whence '[ab]'
 expected-stdout:
 	if
 	if
@@ -13548,6 +13596,12 @@ expected-stdout:
 	true
 	true is a shell builtin
 	true is a shell builtin
+	alias '[ab]'=:
+	alias '[ab]'=:
+	'[ab]' is an alias for :
+	'[ab]' is an alias for :
+	'[ab]'=:
+	:
 ---
 name: whence-preserve-tradition
 description:
