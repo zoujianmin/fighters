@@ -300,6 +300,7 @@ again:
         (size_t) (sizeof(struct darken_un) + deh.dh_oldlen + DARKEN_UNCOMPRESS_MORE_BUFSIZE));
     if (pde == NULL) {
         free(indat);
+        indat = NULL;
         goto errMem;
     }
 
@@ -307,8 +308,11 @@ once_again:
     rl = read(efd, indat, (size_t) deh.dh_newlen);
     if (rl < 0) {
         err_n = errno;
-        if (err_n == EINTR)
+        if (err_n == EINTR) {
+            fputs("dark-energy: Waiting for input...\n", stderr);
+            fflush(stderr);
             goto once_again;
+        }
         fprintf(stderr, "Error, cannot read from %d: %s\n", efd, strerror(err_n));
         fflush(stderr);
         exit(60);
