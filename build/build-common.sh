@@ -3,7 +3,7 @@
 retv=0
 if [ ! -e "${FI_CONFIGURED}" ] ; then
 	./configure --prefix=${FI_PREFIX} --host=${FI_HOST} CC=${FI_TCPREFIX}gcc CXX=${FI_TCPREFIX}g++ \
-		CFLAGS="${FI_CFLAGS}" LDFLAGS="${FI_LDFLAGS}" --disable-nls
+		CFLAGS="${FI_CFLAGS} -ggdb" CXXFLAGS="${FI_CFLAGS} -ggdb" LDFLAGS="${FI_LDFLAGS}" --disable-nls
 	retv=$?
 	[ ${retv} -eq 0 ] && touch "${FI_CONFIGURED}"
 fi
