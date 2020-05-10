@@ -46,6 +46,68 @@ struct darken_un {
     struct darken_head      head;      /* dark-energy head */
 };
 
+#if DECOMPRESS_METHOD == 0
+static int darken_decompress(const unsigned char * datp, uint32_t datLen,
+	unsigned char * outp, uint32_t * poutLen, uint32_t * crc32Value)
+{
+	int ret;
+	lzo_uint outlen;
+	uint32_t oldSize;
+
+	/* check the length of compressed data */
+	if (datLen < 0x5) {
+		fprintf(stderr, "Error, invalid LZO compressed data length: %#x\n",
+			(unsigned int) datLen);
+		fflush(stderr);
+		return -1;
+	}
+
+    /* check the very first byte of compressed data */
+	if (datp[0] != 0xf1) {
+		fprintf(stderr, "Error, invalid LZO compressed data: %02x\n", (unsigned int) datp[0]);
+		fflush(stderr);
+		return -1;
+	}
+
+	/* according to python-lzo source code, we have: */
+	oldSize = (uint32_t) datp[1];
+	oldSize = (oldSize << 8) | ((uint32_t) datp[2]);
+	oldSize = (oldSize << 8) | ((uint32_t) datp[3]);
+	oldSize = (oldSize << 8) | ((uint32_t) datp[4]);
+
+    /* initialize the LZO2 library */
+    ret = lzo_init();
+    if (ret != LZO_E_OK) {
+		fprintf(stderr, "Error, failed to initilaize LZO library: %d\n", ret);
+		fflush(stderr);
+		return -1;
+    }
+
+	outlen = (lzo_uint) *poutLen;
+	/* decompress the data via LZO library */
+    ret = lzo1x_decompress_safe(datp + 0x5, (lzo_uint) (datLen - 0x5),
+        outp, &outlen, NULL);
+    if (ret != LZO_E_OK) {
+		fprintf(stderr, "Error, failed to decompress data: %d\n", ret);
+		fflush(stderr);
+		return -1;
+    }
+
+	/* check the decompressed data length */
+	if (oldSize != (uint32_t) outlen) {
+		fprintf(stderr, "Error, incorrect data length after decompression: %#x, %#x\n",
+			(unsigned int) oldSize, (unsigned int) outlen);
+		fflush(stderr);
+		return -1;
+	}
+	*poutLen = oldSize;
+
+	/* compute the CRC32 checksum of decompressed data */
+	*crc32Value = (uint32_t) lzo_crc32(DARKEN_HEAD_CRC32, outp, outlen);
+	return 0;
+}
+#endif
+
 static void darken_un_free(struct darken_un * pde)
 {
     memset(pde->pbase, 0, (size_t) pde->totLen);
@@ -238,18 +300,17 @@ static void * dark_energy_part(struct darken_head * pdh, size_t dhlen, int fdp, 
 void * dark_energy_from_fd(int efd)
 {
     ssize_t rl;
-    lzo_uint outLen;
     struct stat est;
-    int ret, nonb, err_n;
+    int nonb, err_n;
     unsigned char * indat;
     struct darken_head deh;
     struct darken_un * pde;
+	uint32_t crcVal, outLen;
 
     pde = NULL;
     indat = NULL;
     memset(&est, 0, sizeof(est));
-    ret = fstat(efd, &est);
-    if (ret < 0)
+    if (fstat(efd, &est) < 0)
         return NULL;
     if (S_ISFIFO(est.st_mode) == 0)
         return NULL;
@@ -334,66 +395,36 @@ once_again:
         exit(61);
     }
 
-    err_n = 0;
-    /* check the very first byte of compressed data */
-    if (indat[0] != 0xf1) {
-        err_n = 1;
-        goto errd;
-    }
-    do { /* check the total length of original data */
-        uint32_t oldSize;
-        oldSize = (uint32_t) indat[1];
-        oldSize = (oldSize << 8) | ((uint32_t) indat[2]);
-        oldSize = (oldSize << 8) | ((uint32_t) indat[3]);
-        oldSize = (oldSize << 8) | ((uint32_t) indat[4]);
-        if (oldSize != deh.dh_oldlen) {
-            err_n = 2;
-            goto errd;
-        }
-    } while (0);
-
-    /* initialize the LZO2 library */
-    ret = lzo_init();
-    if (ret != LZO_E_OK) {
-        err_n = 3;
-        goto errd;
-    }
-
-    /* De-compress the data */
+    err_n = 0; crcVal = 0;
     outLen = deh.dh_oldlen + DARKEN_UNCOMPRESS_MORE_BUFSIZE;
-    ret = lzo1x_decompress_safe(&(indat[5]), (lzo_uint) (deh.dh_newlen - 5),
-        pde->head.dh_data, &outLen, NULL);
-    if (ret != LZO_E_OK) {
-        err_n = 4;
-        goto errd;
+	if (darken_decompress(indat, (uint32_t) rl, pde->head.dh_data, &outLen, &crcVal) < 0) {
+		err_n = 1;
+		goto errd;
+	}
+
+	/* compare the crc32 checksum after decompression */
+	if (crcVal != deh.dh_crc32) {
+		err_n = 2;
+		goto errd;
     }
 
     /* free the memory */
     memset(indat, 0, deh.dh_newlen);
     free(indat); indat = NULL;
-    if (deh.dh_oldlen != (uint32_t) outLen) {
-        err_n = 5;
+    if (deh.dh_oldlen != outLen) {
+        err_n = 3;
         goto errd;
     }
-
-    do { /* check de-compress data CRC32 */
-        uint32_t crcVal;
-        crcVal = (uint32_t) lzo_crc32(DARKEN_HEAD_CRC32, pde->head.dh_data, outLen);
-        if (crcVal != deh.dh_crc32) {
-            err_n = 6;
-            goto errd;
-        }
-    } while (0);
 
     do { /* replace file descriptor efd with /dev/null */
         int dfd = open("/dev/null", O_RDONLY);
         if (dfd < 0) {
-            err_n = 7;
+            err_n = 4;
             goto errd;
         }
         if (__builtin_expect(dfd != efd, 1)) {
             if (dup2(dfd, efd) < 0) {
-                err_n = 8;
+                err_n = 5;
                 goto errd;
             }
             close(dfd);
@@ -401,7 +432,7 @@ once_again:
     } while (0);
 
     pde->magic     = DARKEN_UN_MAGIC;
-    pde->totLen    = (uint32_t) outLen;
+    pde->totLen    = outLen;
     pde->pun       = pde->head.dh_data;
     pde->pbase     = pde->head.dh_data;
     pde->offSet    = 0;
