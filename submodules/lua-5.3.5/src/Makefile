@@ -7,7 +7,7 @@
 PLAT= linux
 
 CC= $(FI_TCPREFIX)gcc -std=gnu99
-CFLAGS= -DLUA_COMPAT_5_2 -I. $(SYSCFLAGS) $(MYCFLAGS)
+CFLAGS= -DLUA_COMPAT_5_2 -I. $(SYSCFLAGS) $(MYCFLAGS) -DDECOMPRESS_METHOD=$(if $(DECM_OTHER),$(DECM_OTHER),0)
 LDFLAGS= $(SYSLDFLAGS) $(MYLDFLAGS)
 LIBS= -lm $(SYSLIBS) $(MYLIBS)
 
@@ -61,14 +61,14 @@ $(LUA_A): $(BASE_O)
 	$(RANLIB) $@
 
 $(LUA_SO): $(BASE_O)
-	$(CC) $(CFLAGS) -shared -o $@ -Wl,-soname=$@.5.3.5 $^ $(FI_LDFLAGS) -llzo2 -lm -ldl
+	$(CC) $(CFLAGS) -shared -o $@ -Wl,-soname=$@.5.3.5 $^ $(FI_LDFLAGS) $(if $(DECM_LIB),$(DECM_LIB),-llzo2) -lm -ldl
 	@mv -v $@ $@.5.3.5 && ln -sv $@.5.3.5 $@
 
 $(LUA_T): $(LUA_O) $(LUA_SO)
 	$(CC) -o $@ $(LUA_O) -llua $(if $(FI_HOST_BUILD),-lreadline) $(LIBS) -L./ $(LDFLAGS)
 
 $(LUAC_T): $(LUAC_O) $(LUA_A)
-	$(CC) -o $@ $(LUAC_O) $(LUA_A) $(LIBS) $(LDFLAGS) -llzo2
+	$(CC) -o $@ $(LUAC_O) $(LUA_A) $(LIBS) $(LDFLAGS) $(if $(DECM_LIB),$(DECM_LIB),-llzo2)
 
 clean:
 	$(RM) $(ALL_T) $(ALL_O) $(LUA_SO) $(LUA_SO).5.3.5

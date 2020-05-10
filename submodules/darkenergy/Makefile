@@ -7,6 +7,7 @@
 
 CC       := $(FI_TCPREFIX)gcc
 CFLAGS   := -I. -I$(FI_PREFIX)/include $(FI_CFLAGS)
+CFLAGS   += -DDECOMPRESS_METHOD=$(if $(DECM_OTHER),$(DECM_OTHER),0)
 LDFLAGS  := $(FI_LDFLAGS)
 TARGETS  := darken_un.o libdarken.so template sysp.so
 

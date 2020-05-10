@@ -22,7 +22,7 @@ fi
 if [ ! -e "${FI_INSTALLED}" ] ; then
 	make install ; retv=$?
 	if [ ${retv} -eq 0 ] ; then
-		cd "${FI_PREFIX}/lib" && ln -sv 'liblua.so.5.3.5' 'liblua.so'
+		cd "${FI_PREFIX}/lib" && rm -rf -v 'liblua.so' && ln -sv 'liblua.so.5.3.5' 'liblua.so'
 		retv=$?
 	fi
 	[ ${retv} -eq 0 ] && touch "${FI_INSTALLED}"

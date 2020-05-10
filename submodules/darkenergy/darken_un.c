@@ -17,8 +17,17 @@
 #include <sys/prctl.h>
 
 #include "darken_head.h"
+
+#ifndef DECOMPRESS_METHOD
+#error DECOMPRESS_METHOD not defined
+#endif
+
+#if DECOMPRESS_METHOD == 0
 #include <lzo/lzoconf.h>
 #include <lzo/lzo1x.h>
+#else
+#error invalid value defined for DECOMPRESS_METHOD
+#endif
 
 /* exported functions */
 extern void * dark_energy_from_fd(int efd);
