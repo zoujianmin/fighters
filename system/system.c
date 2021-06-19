@@ -327,6 +327,32 @@ err0:
 	return 0;
 }
 
+static int pipeset_maxsize(int fd, int maxSize)
+{
+	int err_n = 0;
+	int curSize, ret;
+
+	ret = fcntl(fd, F_GETPIPE_SZ, 0);
+	if (ret == -1) {
+		err_n = errno;
+err0:
+		fprintf(stderr, "Error, getpipe-sz(%d) has failed: %s\n",
+			fd, strerror(err_n));
+		fflush(stderr);
+		return -1;
+	}
+
+	curSize = ret;
+	if (curSize >= maxSize)
+		return curSize;
+	ret = fcntl(fd, F_SETPIPE_SZ, maxSize);
+	if (ret == -1) {
+		err_n = errno;
+		goto err0;
+	}
+	return maxSize;
+}
+
 int childproc_run(struct childproc * cp, int flags)
 {
 	pid_t pid;
@@ -347,6 +373,7 @@ err0:
 			fflush(stderr);
 			return -1;
 		}
+		pipeset_maxsize(prfds[1], 0x80000); /* 512KB */
 	}
 
 	if (flags & SYSTEM_INVOKE_WRITE) {
@@ -652,7 +679,7 @@ static int childproc_getpid(lua_State * L)
 	return 1;
 }
 
-static int childproc_free0(lua_State * L)
+static int childproc_free_lua(lua_State * L)
 {
 	struct childproc * cp;
 
@@ -665,24 +692,6 @@ static int childproc_free0(lua_State * L)
 	childproc_free(cp);
 	lua_pushboolean(L, 1);
 	return 1;
-}
-
-static int childproc_free1(lua_State * L)
-{
-	struct childproc * cp;
-
-	if (lua_check_stack(L, 3) < 0)
-		return 0;
-	cp = childproc_get(L, 1);
-	if (cp == NULL)
-		return 0;
-
-	childproc_free(cp);
-	if (lua_getmetatable(L, 1) == 1) {
-		lua_pushnil(L);
-		lua_setfield(L, -2, "__gc");
-	}
-	return 0;
 }
 
 static int childproc_read(lua_State * L)
@@ -786,6 +795,9 @@ static int childproc_write(lua_State * L)
 		lua_pushstring(L, "invalid data type for write");
 		return 2;
 	}
+
+	/* write_fd is a pipe */
+	pipeset_maxsize(cp->write_fd, (int) argl);
 
 	if (ntop >= 2 && lua_isinteger(L, 2))
 		flags = lua_tointeger(L, 2);
@@ -895,8 +907,8 @@ static const struct luaL_Reg childproc_methods[] = {
 	{ "read",           childproc_read },
 	{ "write",          childproc_write },
 	{ "geteval",        childproc_geteval },
-	{ "drop",           childproc_free0 },
-	{ "__gc",           childproc_free1 },
+	{ "drop",           childproc_free_lua },
+	{ "__gc",           childproc_free_lua },
 	{ NULL,             NULL }
 };
 
