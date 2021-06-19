@@ -229,6 +229,7 @@ again:
 
 		if (err_n == ECHILD) {
 			cp->running = 0;
+			cp->eval = 0; /* we've no idea about the exit status */
 			return 0;
 		}
 
@@ -244,12 +245,9 @@ again:
 		return 0;
 	}
 
-	if (WIFEXITED(cpst) || WIFSIGNALED(cpst)) {
-		cp->running = 0;
-		cp->eval = cpst;
-		return 0;
-	}
-	goto again;
+	cp->running = 0;
+	cp->eval = cpst;
+	return 0;
 }
 
 static void close_pipe_fds(int * pfds)
@@ -835,7 +833,7 @@ static int system_setname(lua_State * L)
 		tname = lua_tolstring(L, 1, NULL);
 	if (tname == NULL || tname[0] == '\0') {
 		lua_pushnil(L);
-		lua_pushstring(L, "invalid thread name");
+		lua_pushstring(L, "invalid thread name string");
 		return 2;
 	}
 
@@ -872,13 +870,13 @@ static int childproc_geteval(lua_State * L)
 	}
 
 	exst = cp->eval;
-	if (WIFSIGNALED(exst) != 0) {
-		lua_pushinteger(L, WTERMSIG(exst));
-		lua_pushboolean(L, 1);
+	if (WIFEXITED(exst)) {
+		lua_pushinteger(L, WEXITSTATUS(exst));
+		lua_pushboolean(L, 0);
 		return 2;
 	}
-	lua_pushinteger(L, WEXITSTATUS(exst));
-	lua_pushboolean(L, 0);
+	lua_pushinteger(L, WTERMSIG(exst));
+	lua_pushboolean(L, 1);
 	return 2;
 }
 
