@@ -1,2 +1,4 @@
 .*.swp
-/tarballs/
+/target
+/lua-5.3.6/
+/lzo-2.10/
