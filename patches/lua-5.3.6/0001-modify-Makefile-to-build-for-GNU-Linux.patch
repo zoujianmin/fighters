@@ -1,7 +1,7 @@
 From a95388a643e4717371d320ace735c1b405034faf Mon Sep 17 00:00:00 2001
 From: yejq <xiaoqzye@qq.com>
 Date: Sat, 24 Jul 2021 13:47:03 +0800
-Subject: [PATCH] modify Makefile to build for GNU/Linux
+Subject: [PATCH 1/2] modify Makefile to build for GNU/Linux
 
 ---
  .gitignore    |  6 ++++
