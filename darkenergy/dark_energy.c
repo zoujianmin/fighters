@@ -1024,3 +1024,38 @@ int darken_replace_fd(int * sfd)
     return -1;
 }
 
+void darken_exec_init(struct dark_exec * pde)
+{
+    int idx;
+    if (pde == NULL)
+        return;
+
+    pde->de_pid     = 0;
+    for (idx = 0; idx <= DARKEN_EXEC_ARGS; ++idx)
+        pde->de_argv[idx] = NULL;
+    pde->de_out     = NULL;
+    pde->de_len     = 0;
+    pde->de_outfd   = -1;
+    pde->de_stat    = 0;
+}
+
+void darken_exec_close(struct dark_exec * pde)
+{
+    int idx;
+
+    pde->de_pid = 0;
+    for (idx = 0; idx <= DARKEN_EXEC_ARGS; ++idx)
+        pde->de_argv[idx] = NULL;
+
+    if (pde->de_out != NULL) {
+        free(pde->de_out);
+        pde->de_out = NULL;
+    }
+    pde->de_len = 0;
+
+    if (pde->de_outfd != -1) {
+        close(pde->de_outfd);
+        pde->de_outfd = -1;
+    }
+    pde->de_stat = 0;
+}

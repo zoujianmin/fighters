@@ -21,4 +21,3 @@ echo -e "\t.balign 4"
 echo    "$2:"
 echo -e "\t.incbin \"$1\"\n"
 exit 0
-

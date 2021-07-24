@@ -146,4 +146,3 @@ for argf in sys.argv[3:]:
 hout.write("\n#endif\n"); hout.close()
 bout.write(b'\x00\x00\x00\x00\xff\xff\xff\xff'); bout.close()
 print("Dark-Energy generation DONE.", file=sys.stdout); sys.exit(0)
-

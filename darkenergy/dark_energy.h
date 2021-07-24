@@ -82,8 +82,7 @@ static inline int darken_has_output(const struct dark_energy * pde)
 	return (pde->de_out != NULL) && (pde->de_len > 0);
 }
 
-
-#define DARKEN_EXEC_ARGS       8
+#define DARKEN_EXEC_ARGS       16
 struct dark_exec {
     long                       de_pid;       /* pid of child process */
     const char *               de_argv[DARKEN_EXEC_ARGS + 1];
@@ -93,7 +92,11 @@ struct dark_exec {
     int                        de_stat;      /* exit status of child process */
 };
 
+void darken_exec_init(struct dark_exec * pde);
+
 int darken_exec(struct dark_exec * pde, int runopt);
+
+void darken_exec_close(struct dark_exec * pde);
 
 int darken_waitpid(long pidc, int waitopt, int * runp, int * exstp);
 
