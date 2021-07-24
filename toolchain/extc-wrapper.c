@@ -92,6 +92,7 @@ int main(int argc, char *argv[])
 	fprintf(stderr, EXTC_WRAPPER "Error, failed to invoke %s: %s\n",
 		wrap.real_path, strerror(errno));
 	fflush(stderr);
+	wrapper_destroy(&wrap);
 	return 3;
 }
 
