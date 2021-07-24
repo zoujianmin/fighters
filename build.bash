@@ -237,11 +237,11 @@ build_source() {
         fi
     fi
 
+    # goto source directory
+    cd "${TOPBDIR}/${sbdir}" || return 7
     if [ -e "${TAG_CONFIG}" ] ; then
         echo "already configured: ${sbdir}, skipped"
     else
-        # goto source directory
-        cd "${TOPBDIR}/${sbdir}" || return 7
         # invoke the configuration function
         local fconf="${ftConfig[${srcn}]}"
         ${fconf} ; retw=$?
@@ -253,13 +253,13 @@ build_source() {
     fi
 
     local dobuild=1
+    # change to source directory again
+    cd "${TOPBDIR}/${sbdir}" || return 9
     [ -e "${TAG_BUILT}" ] && dobuild=0
     [ -e ".tag-rebuild" ] && dobuild=1
     if [ ${dobuild} -eq 0 ] ; then
         echo "already built: ${sbdir}, skipped"
     else
-        # change to source directory again
-        cd "${TOPBDIR}/${sbdir}" || return 9
         # invoke build function
         local fbuild="${ftBuild[${srcn}]}"
         ${fbuild} ; retw=$?
