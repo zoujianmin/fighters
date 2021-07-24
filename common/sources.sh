@@ -15,7 +15,7 @@
 # limitations under the License.
 
 lua53_config() {
-    patch -Np1 -i ${TOPBDIR}/patches/lua-5.3.6/0001-modify-Makefile-to-build-for-GNU-Linux.patch
+    apply_patches "${TOPBDIR}/patches/lua-5.3.6"
     return $?
 }
 

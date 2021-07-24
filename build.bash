@@ -52,6 +52,7 @@ declare -r -x CURBDIR="$(command pwd -L)"
 get_topdir "$0" || exit 1
 # tag files used for control compilation
 declare -r TAG_BUILT='.tag-built'
+declare -r TAG_PATCHED='.tag-patched'
 declare -r TAG_CONFIG='.tag-configured'
 
 # opensource tarball directory
@@ -68,6 +69,33 @@ declare -r def_sources="${FTARGET_DIR}/sources.sh"
 declare -r def_platform="${FTARGET_DIR}/platform.sh"
 # toolchain definition file
 declare -r def_toolchain="${FTARGET_DIR}/toolchain.sh"
+
+# apply patches from directory
+apply_patches() {
+    local pdir="$1"
+    if [ ! -d "${pdir}" ] ; then
+        echo "Error, not a directory: '${pdir}'" 1>&2
+        return 1
+    fi
+    if [ -e "${TAG_PATCHED}" ] ; then
+        # already patched, skipped
+        return 0
+    fi
+    local retp=0
+    local -i pcnt=0
+    local pfile=""
+    for pfile in "${pdir}"/*.patch ; do
+        if [ -f "${pfile}" ] ; then
+            patch -Np1 -i "${pfile}" ; retp=$?
+            [ ${retp} -ne 0 ] && break
+            pcnt+=1
+        fi
+    done
+    [ ${retp} -ne 0 ] && return 2
+    [ ${pcnt} -eq 0 ] && return 3
+    touch "${TAG_PATCHED}"
+    return $?
+}
 
 # check whether target definition files exist
 check_target_defines() {
