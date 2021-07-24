@@ -7,7 +7,6 @@
 import os
 import sys
 import lzo
-import zlib
 import stat
 import struct
 import os.path as opath
@@ -28,39 +27,7 @@ DARKEN_LIST_MAXID        = 0x00ffffff
 
 # Global variables, the path of output files
 fileh, fileb = None, None
-DARKEN_INDEX, de_compress = 0, None
-
-# compress scripts via LZO
-def lzo_compressor(rawdat):
-    chksum = lzo.crc32(rawdat, DARKEN_HEAD_CRC32) & 0xffffffff
-    cdat = lzo.compress(rawdat, 9, True)
-    cdat = lzo.optimize(cdat, True)
-    return chksum, cdat
-# compress scripts via ZLIB
-def zlib_compressor(rawdat):
-    chksum = zlib.crc32(rawdat, DARKEN_HEAD_CRC32) & 0xffffffff
-    cdat = zlib.compress(rawdat, 9)
-    return chksum, cdat
-# determine the Dark-Energy compressor
-def get_compressor(envarg):
-    global de_compress
-    if envarg is None:
-        de_compress = lzo_compressor
-        return True
-    cdx = 0
-    try:
-        cdx = int(envarg, base=0)
-    except ValueError as errp:
-        print(errp, file=sys.stderr)
-        return False
-    if cdx == 0:
-        de_compress = lzo_compressor
-        return True
-    if cdx == 1:
-        de_compress = zlib_compressor
-        return True
-    print("Error, invalid dark-energy compressor: %d".format(cdx), file=sys.stderr)
-    return False
+DARKEN_INDEX = 0
 # Get the Dark-Energy list ID
 def get_darken_list_id(arg1):
     listID = None
@@ -138,7 +105,9 @@ def process_file(farg, outh, outb, lid):
     harg = open(farg, "rb") # open the file
     darg = harg.read(-1)    # read the whole file into memory
     assert fSize == len(darg) # check that we've read the whole file
-    crcval, darg = de_compress(darg)
+    crcval = lzo.crc32(darg, DARKEN_HEAD_CRC32) & 0xffffffff # calculate the CRC32 value
+    darg = lzo.compress(darg, 9, True) # compress the data via LZO2 compression
+    darg = lzo.optimize(darg, True) # optimize the compressed data
     larg = len(darg) # get the length of compress data
     # write the C header file
     idx = DARKEN_INDEX
@@ -158,9 +127,6 @@ def process_file(farg, outh, outb, lid):
         print("Error, too many darken-entries!", file=sys.stderr)
         return False
     return True
-# set the dark-energy compressor
-if not get_compressor(os.getenv('DECM_OTHER')):
-    os.exit(1)
 # check the number of arguments
 argc = len(sys.argv)
 if argc < 0x4:
@@ -180,3 +146,4 @@ for argf in sys.argv[3:]:
 hout.write("\n#endif\n"); hout.close()
 bout.write(b'\x00\x00\x00\x00\xff\xff\xff\xff'); bout.close()
 print("Dark-Energy generation DONE.", file=sys.stdout); sys.exit(0)
+

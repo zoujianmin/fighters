@@ -14,8 +14,6 @@
 extern "C" {
 #endif
 
-#define DECOMPRESS_LZO          0
-
 #define DARKEN_HEAD_MAGIC       0x2f2f2123      /* //!# */
 #define DARKEN_HEAD_LENMIN      0x20            /* 32 bytes */
 #define DARKEN_HEAD_LENMAX      0x00100000      /* 1MB */

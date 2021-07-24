@@ -22,7 +22,7 @@
 #error DECOMPRESS_METHOD not defined
 #endif
 
-#if DECOMPRESS_METHOD == DECOMPRESS_LZO
+#if DECOMPRESS_METHOD == 0
 #include <lzo/lzoconf.h>
 #include <lzo/lzo1x.h>
 #else
