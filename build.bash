@@ -55,20 +55,24 @@ declare -r TAG_BUILT='.tag-built'
 declare -r TAG_CONFIG='.tag-configured'
 
 # opensource tarball directory
-declare -r SOURCE_DIR="${TOPBDIR}/opensource"
+declare -r FSOURCE_DIR="${TOPBDIR}/opensource"
 # project target directory path
-declare -r -x TARGET_DIR="${TOPBDIR}/target"
+declare -r -x FTARGET_DIR="${TOPBDIR}/target"
+# project target staging directory
+declare -r -x FSTAGING_DIR="${FTARGET_DIR}/staging"
+# project target install directory
+declare -r -x FINSTALL_DIR="${FTARGET_DIR}/install"
 # sources definition file
-declare -r def_sources="${TARGET_DIR}/sources.sh"
+declare -r def_sources="${FTARGET_DIR}/sources.sh"
 # platform definition file
-declare -r def_platform="${TARGET_DIR}/platform.sh"
+declare -r def_platform="${FTARGET_DIR}/platform.sh"
 # toolchain definition file
-declare -r def_toolchain="${TARGET_DIR}/toolchain.sh"
+declare -r def_toolchain="${FTARGET_DIR}/toolchain.sh"
 
 # check whether target definition files exist
 check_target_defines() {
-    if [ ! -d "${TARGET_DIR}" ] ; then
-        echo "Error, target directory not found: \"${TARGET_DIR}\"." 1>&2
+    if [ ! -d "${FTARGET_DIR}" ] ; then
+        echo "Error, target directory not found: \"${FTARGET_DIR}\"." 1>&2
         return 1
     fi
     if [ ! -f "${def_sources}" ] ; then
@@ -83,7 +87,28 @@ check_target_defines() {
         echo "Error, toolchain definition not found: \"${def_toolchain}\"." 1>&2
         return 4
     fi
+    # create staging and install directories
+    create_directory "${FSTAGING_DIR}" "${FINSTALL_DIR}" || return 5
     return 0
+}
+
+# function to check and create directory
+create_directory() {
+    local rval=0
+    while [ -n "$1" ] ; do
+        local tdir="$1"
+        if [ -d "${tdir}" ] ; then
+            shift 1
+            continue
+        fi
+        mkdir -p "${tdir}" 2>/dev/null ; rval=$?
+        if [ ${rval} -ne 0 ] ; then
+            echo "Error, failed to create directory: '${tdir}'" 1>&2
+            break
+        fi
+        shift 1
+    done
+    return ${rval}
 }
 
 # check whether the argument given is a function
@@ -182,7 +207,7 @@ build_source() {
     # define Source Build directory
     local sbdir="${srcn}"
     if [ ! -d "${sbdir}" ] ; then
-        local -r tarball="${SOURCE_DIR}/${srcn}"
+        local -r tarball="${FSOURCE_DIR}/${srcn}"
         # check whether the source tarball exists
         if [ ! -f "${tarball}" ] ; then
             echo "Error, source not found: ${srcn}" 1>&2
@@ -261,7 +286,7 @@ clean_source() {
     # define Source Build directory
     local cbdir="${srco}"
     if [ ! -d "${cbdir}" ] ; then
-        local -r tarball="${SOURCE_DIR}/${srco}"
+        local -r tarball="${FSOURCE_DIR}/${srco}"
         # check whether the source tarball exists
         if [ ! -f "${tarball}" ] ; then
             echo "Error, source not found: ${srco}" 1>&2
