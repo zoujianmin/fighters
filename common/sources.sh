@@ -41,7 +41,19 @@ liblzo2_build() {
     return $?
 }
 
+dummy_config() {
+    # nothing TODO
+    return 0
+}
+
+darkenergy_build() {
+    make FTC_PREFIX=${FTC_PREFIX} FTC_CFLAGS="${FTC_CFLAGS}" -j1
+    return $?
+}
+
 register_source 'lua-5.3.6.tar.gz' \
     lua53_config lua53_build fighter_clean
 register_source 'lzo-2.10.tar.gz' \
     liblzo2_config liblzo2_build fighter_clean
+register_source 'darkenergy' \
+    dummy_config darkenergy_build fighter_clean

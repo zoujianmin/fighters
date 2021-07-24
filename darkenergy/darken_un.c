@@ -18,16 +18,8 @@
 
 #include "darken_head.h"
 
-#ifndef DECOMPRESS_METHOD
-#error DECOMPRESS_METHOD not defined
-#endif
-
-#if DECOMPRESS_METHOD == 0
 #include <lzo/lzoconf.h>
 #include <lzo/lzo1x.h>
-#else
-#error invalid value defined for DECOMPRESS_METHOD
-#endif
 
 /* exported functions */
 extern void * dark_energy_from_fd(int efd);
@@ -46,7 +38,6 @@ struct darken_un {
     struct darken_head      head;      /* dark-energy head */
 };
 
-#if DECOMPRESS_METHOD == 0
 static int darken_decompress(const unsigned char * datp, uint32_t datLen,
 	unsigned char * outp, uint32_t * poutLen, uint32_t * crc32Value)
 {
@@ -106,7 +97,6 @@ static int darken_decompress(const unsigned char * datp, uint32_t datLen,
 	*crc32Value = (uint32_t) lzo_crc32(DARKEN_HEAD_CRC32, outp, outlen);
 	return 0;
 }
-#endif
 
 static void darken_un_free(struct darken_un * pde)
 {
@@ -154,9 +144,7 @@ int dark_energy_feof(void * * ppde)
 
     offs = pde->offSet;
     maxlen = pde->totLen;
-    if (__builtin_expect(offs >= maxlen, 0))
-        return 1;
-    return 0;
+    return offs >= maxlen;
 }
 
 int dark_energy_getc(void * * ppde)
@@ -449,4 +437,3 @@ errd:
     fflush(stderr);
     _exit(63);
 }
-

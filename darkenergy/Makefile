@@ -5,11 +5,10 @@
 #
 # 2020/03/29
 
-CC       := $(FI_TCPREFIX)gcc
-CFLAGS   := -I. -I$(FI_PREFIX)/include $(FI_CFLAGS)
-CFLAGS   += -DDECOMPRESS_METHOD=$(if $(DECM_OTHER),$(DECM_OTHER),0)
-LDFLAGS  := $(FI_LDFLAGS)
-TARGETS  := darken_un.o libdarken.so template system.so
+CC       := $(FTC_PREFIX)gcc
+CFLAGS   := -I. -I$(FSTAGING_DIR)/usr/include $(FTC_CFLAGS)
+LDFLAGS  := $(FTC_LDFLAGS)
+TARGETS  := darken_un.o libdarken.so template
 
 .PHONY : all clean install
 
@@ -22,23 +21,14 @@ template : darkenergy-template.o template.o libdarken.so
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 template.o : template.sh
-	ghost 0x0419 template $^
-	fz2object template.fz __de_template | $(CC) $(FI_CFLAGS) -c -o $@ -x assembler -
+	./ghost 0x0419 template $^
+	./fz2object template.fz __de_template | $(CC) $(FTC_CFLAGS) -c -o $@ -x assembler -
 
 libdarken.so : dark_energy.o
 	$(CC) -shared -o $@ $< $(LDFLAGS) -Wl,-soname=$@
 
-system.so : system.c
-	$(CC) $(CFLAGS) -shared -o $@ -Wl,-soname=$@ $< $(LDFLAGS) -llua
-
 %.o : %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-install : all
-	mkdir -p -v $(FI_PREFIX)/include && cp -v -u dark_energy.h $(FI_PREFIX)/include/
-	mkdir -p -v $(FI_PREFIX)/lib && cp -v -u libdarken.so $(FI_PREFIX)/lib/
-	mkdir -p -v $(FI_PREFIX)/lib/lua && cp -v -u system.so ${FI_PREFIX}/lib/lua/
-
 clean :
 	rm -rf *.o $(TARGETS) *.fz template.h
-
