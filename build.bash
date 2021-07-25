@@ -29,7 +29,7 @@ declare -i startIndex=1
 # index of last source to process
 declare -i endIndex=0
 
-# declare TOPBDIR environment variable
+# declare FTOPDIR environment variable
 get_topdir() {
     local topdir=`realpath -s "$1"`
     [ -n "${topdir}" ] && topdir="${topdir%/*}"
@@ -42,23 +42,25 @@ get_topdir() {
         echo "Error, not a directory: \"${topdir}\"." 1>&2
         return 2
     fi
-    declare -g -x TOPBDIR="${topdir}"
+    declare -g -x FTOPDIR="${topdir}"
     return 0
 }
 
-# save current directoy to CURBDIR
-declare -r -x CURBDIR="$(command pwd -L)"
-# get TOPBDIR defined as early as possible
+# save current directoy to FCURDIR
+declare -r -x FCURDIR="$(command pwd -L)"
+# get FTOPDIR defined as early as possible
 get_topdir "$0" || exit 1
+# add external toolchain wrapper to PATH
+export PATH=${FTOPDIR}/toolchain/bin:/usr/bin:/usr/sbin:/bin:/sbin
 # tag files used for control compilation
 declare -r TAG_BUILT='.tag-built'
 declare -r TAG_PATCHED='.tag-patched'
 declare -r TAG_CONFIG='.tag-configured'
 
 # opensource tarball directory
-declare -r FSOURCE_DIR="${TOPBDIR}/opensource"
+declare -r FSOURCE_DIR="${FTOPDIR}/opensource"
 # project target directory path
-declare -r -x FTARGET_DIR="${TOPBDIR}/target"
+declare -r -x FTARGET_DIR="${FTOPDIR}/target"
 # project target staging directory
 declare -r -x FSTAGING_DIR="${FTARGET_DIR}/staging"
 # project target install directory
@@ -229,8 +231,8 @@ build_source() {
     fi
 
     local retw=0
-    # goto TOPBDIR directory
-    cd "${TOPBDIR}" || return 2
+    # goto FTOPDIR directory
+    cd "${FTOPDIR}" || return 2
 
     # define Source Build directory
     local sbdir="${srcn}"
@@ -266,7 +268,7 @@ build_source() {
     fi
 
     # goto source directory
-    cd "${TOPBDIR}/${sbdir}" || return 7
+    cd "${FTOPDIR}/${sbdir}" || return 7
     if [ -e "${TAG_CONFIG}" ] ; then
         echo "already configured: ${sbdir}, skipped"
     else
@@ -282,7 +284,7 @@ build_source() {
 
     local dobuild=1
     # change to source directory again
-    cd "${TOPBDIR}/${sbdir}" || return 9
+    cd "${FTOPDIR}/${sbdir}" || return 9
     [ -e "${TAG_BUILT}" ] && dobuild=0
     [ -e ".tag-rebuild" ] && dobuild=1
     if [ ${dobuild} -eq 0 ] ; then
@@ -308,8 +310,8 @@ clean_source() {
         return 1
     fi
 
-    # goto TOPBDIR directory
-    cd "${TOPBDIR}" || return 2
+    # goto FTOPDIR directory
+    cd "${FTOPDIR}" || return 2
 
     # define Source Build directory
     local cbdir="${srco}"
@@ -345,27 +347,27 @@ fetch_build_range() {
     # get the number of elements in source list
     local -i maxnum=${#srcList[@]}
 
-    # get the length of TOPBDIR and CURBDIR
-    local -i toplen=${#TOPBDIR}
-    local -i curlen=${#CURBDIR}
+    # get the length of FTOPDIR and FCURDIR
+    local -i toplen=${#FTOPDIR}
+    local -i curlen=${#FCURDIR}
     if [ ${curlen} -lt ${toplen} ] ; then
-        echo "Error, invalid current directory: '${CURBDIR}'" 1>&2
+        echo "Error, invalid current directory: '${FCURDIR}'" 1>&2
         return 1
     fi
 
-    if [ "${TOPBDIR}" = "${CURBDIR}" ] ; then
+    if [ "${FTOPDIR}" = "${FCURDIR}" ] ; then
         declare -g -i endIndex=${maxnum}
         return 0
     fi
 
     toplen+=1
-    local topdir="${CURBDIR:0:${toplen}}"
-    if [ "${topdir}" != "${TOPBDIR}/" ] ; then
-        echo "Error, invalid current directory: '${CURBDIR}'" 1>&2
+    local topdir="${FCURDIR:0:${toplen}}"
+    if [ "${topdir}" != "${FTOPDIR}/" ] ; then
+        echo "Error, invalid current directory: '${FCURDIR}'" 1>&2
         return 2
     fi
 
-    local srcp="${CURBDIR:${toplen}}"
+    local srcp="${FCURDIR:${toplen}}"
     if [ -z "${srcp}" ] ; then
         echo "Error, cannot get source package path." 1>&2
         return 3
@@ -379,7 +381,7 @@ fetch_build_range() {
             found=${idx}
             break
         fi
-        if [ -d "${TOPBDIR}/${srcq}" ] ; then
+        if [ -d "${FTOPDIR}/${srcq}" ] ; then
             idx+=1
             continue
         fi

@@ -15,16 +15,14 @@
 # limitations under the License.
 
 lua53_config() {
-    apply_patches "${TOPBDIR}/patches/lua-5.3.6" || return 1
-    [ ! -e 'src/darken_un.c' ] && ln -sv "${TOPBDIR}/darkenergy/darken_un.c" ./src/
-    [ ! -e 'src/darken_head.h' ] && ln -sv "${TOPBDIR}/darkenergy/darken_head.h" ./src/
+    apply_patches "${FTOPDIR}/patches/lua-5.3.6" || return 1
+    [ ! -e 'src/darken_un.c' ] && ln -sv "${FTOPDIR}/darkenergy/darken_un.c" ./src/
+    [ ! -e 'src/darken_head.h' ] && ln -sv "${FTOPDIR}/darkenergy/darken_head.h" ./src/
     return 0
 }
 
 lua53_build() {
-    make FTC_PREFIX=${FTC_PREFIX} \
-        FTC_CFLAGS="${FTC_CFLAGS} -I${FSTAGING_DIR}/usr/include " \
-        FTC_LDFLAGS="-L${FSTAGING_DIR}/usr/lib" -j1
+    make FTC_PREFIX=${FTC_PREFIX} FTC_CFLAGS="${FTC_CFLAGS}" -j1
     return $?
 }
 
@@ -55,6 +53,18 @@ darkenergy_build() {
     return $?
 }
 
+simple_build() {
+    make -j1
+    return $?
+}
+
+simple_clean() {
+    make -j1 clean
+    return $?
+}
+
+register_source 'toolchain' \
+    dummy_config simple_build simple_clean
 register_source 'lzo-2.10.tar.gz' \
     liblzo2_config liblzo2_build fighter_clean
 register_source 'lua-5.3.6.tar.gz' \

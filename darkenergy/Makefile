@@ -21,8 +21,8 @@ template : darkenergy-template.o template.o libdarken.so
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 template.o : template.sh
-	./ghost 0x0419 template $^
-	./fz2object template.fz __de_template | $(CC) $(FTC_CFLAGS) -c -o $@ -x assembler -
+	ghost 0x0419 template $^
+	fz2object template.fz __de_template | $(CC) $(FTC_CFLAGS) -c -o $@ -x assembler -
 
 libdarken.so : dark_energy.o
 	$(CC) -shared -o $@ $< $(LDFLAGS) -Wl,-soname=$@
