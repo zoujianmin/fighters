@@ -1,3 +1,5 @@
+*.a
+*.o
 .*.swp
 /target
 /lua-5.3.6/
