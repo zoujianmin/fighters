@@ -16,10 +16,10 @@
 MAKEFLAGS     += -r -R
 
 # external toolchain root directory
-EXTC_ROOT     := /opt/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu
+EXTC_ROOT     := /usr/bin
 
 # toolchain definitions:
-FTC_PREFIX    := aarch64-linux-gnu-
+FTC_PREFIX    := x86_64-linux-gnu-
 CC            := $(FTC_PREFIX)gcc
 CXX           := $(FTC_PREFIX)g++
 STRIP         := $(FTC_PREFIX)strip

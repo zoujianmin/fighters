@@ -18,12 +18,8 @@ HOSTCC      := gcc
 HOST_CFLAGS := -Wall -O2 -fPIC -D_GNU_SOURCE
 
 # check for external toolchain root directory
-ifeq ($(EXTCROOT),)
-$(error EXTCROOT not defined)
-endif
-EXTC_ROOT   := $(wildcard $(EXTCROOT))
-ifeq ($(EXTC_ROOT),)
-$(error invalid EXTCROOT defined)
+ifeq ($(wildcard $(EXTC_ROOT)),)
+$(error invalid EXTC_ROOT defined: $(EXTC_ROOT))
 endif
 
 # check external toolchain prefix
@@ -54,11 +50,11 @@ all: $(TARGETS)
 define external_toolchain
 .PHONY: bin/$(FTC_PREFIX)$(1)
 bin/$(FTC_PREFIX)$(1): $(2)
-	[ -x "$(EXTC_ROOT)/bin/$(FTC_PREFIX)$(1)" ] && ln -v $$< $$@ ; exit 0
+	[ -x "$(EXTC_ROOT)/bin/$(FTC_PREFIX)$(1)" ] && [ ! -e $$@ ] && ln -v $$< $$@ ; exit 0
 endef
 
 $(foreach tcbin,$(EXTC_CLS),$(eval $(call external_toolchain,$(tcbin),extc-wrapper)))
 $(foreach tcbin,$(EXTC_BIN),$(eval $(call external_toolchain,$(tcbin),extc-invoker)))
 
 clean:
-	rm -rf $(TARGETS)
+	rm -rf bin/*-* $(TARGETS)
