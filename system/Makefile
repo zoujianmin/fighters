@@ -12,20 +12,23 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-MAKEFLAGS   += -r -R
-CC          := gcc
-LUA_DIR     := /opt/dumpTool
-CFLAGS      := -Wall -D_GNU_SOURCE -fPIC -O2
-CFLAGS      += -I$(LUA_DIR)/include
-LDFLAGS     := -Wl,-rpath=$(LUA_DIR)/lib -L$(LUA_DIR)/lib -llua
+include $(FTARGET_DIR)/target.mk
 
-TARGETS     := system.so
+CFLAGS      := -Iinclude
+FT_OBJS     := src/ft_ipc.o
+TARGETS     := system.so libfighter.so
 .PHONY: all clean
 
 all: $(TARGETS)
 
+%.o: %.c
+	$(CC) -c -o $@ $(CFLAGS) $<
+
+libfighter.so: $(FT_OBJS)
+	$(CC) -shared -o $@ -Wl,-soname=$@ $^
+
 system.so: system.c
-	$(CC) -shared -o $@ $(CFLAGS) $< $(LDFLAGS)
+	$(CC) -shared -o $@ $(CFLAGS) $< -llua
 
 clean:
-	rm -rf *.so
+	rm -rf *.so $(FT_OBJS)

@@ -22,7 +22,8 @@ lua53_config() {
 }
 
 lua53_build() {
-    make FTC_PREFIX=${FTC_PREFIX} FTC_CFLAGS="${FTC_CFLAGS}" -j1
+    make FTC_PREFIX=${FTC_PREFIX} FTC_CFLAGS="${FTC_CFLAGS}" -j1 || return 1
+    make INSTALL_TOP="${FSTAGING_DIR}/usr" install
     return $?
 }
 
@@ -71,3 +72,5 @@ register_source 'lua-5.3.6.tar.gz' \
     lua53_config lua53_build fighter_clean
 register_source 'darkenergy' \
     dummy_config darkenergy_build fighter_clean
+register_source 'system' \
+    dummy_config simple_build simple_clean
