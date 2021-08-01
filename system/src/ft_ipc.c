@@ -110,7 +110,7 @@ ftipc_cli ftipc_client_connect(const char * psn, uint32_t option)
     if (sockfd == -1)
         return NULL;
 
-    cli = (struct ftipc_client *) calloc(0x1, sizeof(*cli));
+    cli = (struct ftipc_client *) malloc(sizeof(*cli));
     if (cli == NULL) {
         fputs("Error, System Out of Memory!\n", stderr);
         fflush(stderr);
@@ -134,6 +134,11 @@ ftipc_cli ftipc_client_connect(const char * psn, uint32_t option)
 err0:
     if (sockfd != -1)
         close(sockfd);
+    if (cli != NULL) {
+        cli->fc_magic0 = 0;
+        cli->fc_magic1 = 0;
+        free(cli);
+    }
     return NULL;
 }
 
