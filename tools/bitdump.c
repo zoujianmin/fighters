@@ -17,11 +17,19 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
 
-static __attribute__((noinline)) void bit_dump_32(const char * arg, unsigned int _val)
+typedef union {
+	int64_t               sval;
+	uint64_t              uval;
+} large_int;
+
+typedef unsigned long long large_uint;
+
+static void bitdump32(const char * arg, uint32_t _val)
 {
 	int i, k;
-	unsigned int val;
+	uint32_t val;
 	char bit_buf[256];
 
 	/*
@@ -48,10 +56,10 @@ static __attribute__((noinline)) void bit_dump_32(const char * arg, unsigned int
 	fputs("\t31    27    23    19    15    11     7     3\n", stdout);
 }
 
-static __attribute__((noinline)) void bit_dump_64(const char * arg, unsigned long long _val)
+static void bitdump64(const char * arg, large_uint _val)
 {
 	int i, k;
-	unsigned int val;
+	large_uint val;
 	char bit_buf[256];
 
 	/*
@@ -83,26 +91,44 @@ static __attribute__((noinline)) void bit_dump_64(const char * arg, unsigned lon
 
 int main(int argc, char *argv[])
 {
-	int i, ba;
-	unsigned long long val;
-	const char *arg;
+	int idx;
 
-	for (i = 0x1; i < argc; ++i) {
-		arg = argv[i];
+	for (idx = 0x1; idx < argc; ++idx) {
+		large_int lit;
+		const char * arg;
+		int base, neg_offs;
 
-		ba = 10;
-		if (arg[0] == '0') {
-			if ((arg[1] == 'x') || (arg[1] == 'X'))
-				ba = 16;
-			else
-				ba = 8;
+		base = 10;
+		neg_offs = 0;
+		arg = argv[idx];
+		if (arg[0] == '-')
+			neg_offs = 1;
+
+		if (arg[neg_offs] == '0') {
+			char cha = arg[neg_offs + 1];
+			if (cha == 'x' || cha == 'X')
+				base = 16;
+			else if (cha == 'b' || cha == 'B')
+				base = 2;
+			else /* if (cha == 'o' || cha == 'O') */
+				base = 8;
 		}
 
-		val = strtoull(arg, NULL, ba);
-		if ((val & 0xFFFFFFFF) == val)
-			bit_dump_32(arg, (unsigned int) val);
-		else
-			bit_dump_64(arg, val);
+		lit.uval = (uint64_t) strtoull(arg + neg_offs, NULL, base);
+		if (neg_offs != 0) {
+			int32_t sval;
+			lit.sval = 0 - lit.sval;
+			sval = (int32_t) lit.sval;
+			if (lit.sval == (int64_t) sval)
+				bitdump32(arg, (uint32_t) lit.uval);
+			else
+				bitdump64(arg, lit.uval);
+		} else {
+			if ((lit.uval & 0xFFFFFFFF) == lit.uval)
+				bitdump32(arg, (uint32_t) lit.uval);
+			else
+				bitdump64(arg, lit.uval);
+		}
 	}
 
 	return 0;
