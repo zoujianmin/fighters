@@ -39,6 +39,9 @@ struct ftmsock * ftmsock_create(const char * mcaddr,
     const char * mcnetdev, unsigned short rport,
     unsigned short wport, int mc_ipv6);
 
+int ftmsock_reopen(struct ftmsock * ftms,
+	const char * new_netdev);
+
 int ftmsock_send(struct ftmsock * ftms,
     const void * ptr, unsigned int length);
 
