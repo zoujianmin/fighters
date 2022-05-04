@@ -28,11 +28,12 @@ struct ftmsock {
     unsigned int         ms_magic;
     char                 ms_addr[FIGHTER_ADDRSTRLEN];
     char                 ms_netdev[FIGHTER_NETDEV_SIZE];
-    int                  ms_rfd;
-    int                  ms_wfd;
+	int                  ms_sockfd;
     unsigned short       ms_rport;
     unsigned short       ms_wport;
-    int                  ms_ipv6;
+	int                  ms_ipv6;
+	unsigned int         ms_ifidx;
+	void *               ms_send_addr;
 };
 
 struct ftmsock * ftmsock_create(const char * mcaddr,
@@ -43,10 +44,10 @@ int ftmsock_reopen(struct ftmsock * ftms,
 	const char * new_netdev);
 
 int ftmsock_send(struct ftmsock * ftms,
-    const void * ptr, unsigned int length);
+    const void * mptr, unsigned int length);
 
 int ftmsock_recv(struct ftmsock * ftms,
-    void * ptr, unsigned int length, int timeout);
+    void * mptr, unsigned int length, int timeout);
 
 void ftmsock_destroy(struct ftmsock * ftms);
 
