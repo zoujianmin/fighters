@@ -32,13 +32,10 @@ enum nice_level {
 
 static void set_nice(enum nice_level nrl)
 {
+    int ret;
     int error, val0, val1;
 
     switch (nrl) {
-    case NICE_RUN_NORMAL:
-        val1 = 0;
-        break;
-
     case NICE_RUN_LOW:
         val1 = 19;
         break;
@@ -47,6 +44,8 @@ static void set_nice(enum nice_level nrl)
         val1 = -20;
         break;
 
+    case NICE_RUN_NORMAL:
+        /* just fall-through */
     default:
         val1 = 0;
         break;
@@ -64,27 +63,26 @@ static void set_nice(enum nice_level nrl)
 
     if (val0 == val1)
         return;
-    if (val1 != nice(val1 - val0)) {
-        error = errno;
-        fprintf(stderr, "Error, nice(%d) has failed: %s\n",
-            val1 - val0, strerror(error));
+
+    errno = 0;
+    ret = nice(val1 - val0);
+    error = errno;
+    if (error && ret != val1) {
+        fprintf(stderr, "Error, nice(%d) has failed with %d: %s\n",
+            val1 - val0, ret, strerror(error));
         fflush(stderr);
     }
 }
 
 static void set_scheduler(enum nice_level nrl)
 {
+	int error;
     int policy, ret;
     struct sched_param spa;
 
     memset(&spa, 0, sizeof(spa));
 
     switch (nrl) {
-    case NICE_RUN_NORMAL:
-        policy = SCHED_OTHER;
-        spa.sched_priority = 0;
-        break;
-
     case NICE_RUN_LOW:
         policy = SCHED_IDLE;
         spa.sched_priority = 0;
@@ -95,21 +93,22 @@ static void set_scheduler(enum nice_level nrl)
         spa.sched_priority = 99;
         break;
 
+    case NICE_RUN_NORMAL:
+        /* just fall-through */
     default:
         policy = SCHED_OTHER;
         spa.sched_priority = 0;
         break;
     }
 
-    ret = sched_setscheduler(getpid(), policy, &spa);
-    if (ret == -1) {
-        int error;
-        error = errno;
+	errno = 0;
+	ret = sched_setscheduler(getpid(), policy, &spa);
+	error = errno;
+	if (ret == -1 && error != ENOSYS) {
         fprintf(stderr, "Error, failed to set scheduler %d: %s\n",
             (int) nrl, strerror(error));
         fflush(stderr);
     }
-
 }
 
 int main(int argc, char *argv[])
@@ -147,5 +146,5 @@ int main(int argc, char *argv[])
     fprintf(stderr, "Error, failed to invoke '%s': %s\n",
         pstr, strerror(error));
     fflush(stderr);
-    exit(2);
+    return 2;
 }
