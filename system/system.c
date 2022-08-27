@@ -24,8 +24,14 @@
 #include <sys/wait.h>
 #include <sys/prctl.h>
 #include <signal.h>
+#include <poll.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <pthread.h>
+
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 
 #include <lua.h>
 #include <lualib.h>
@@ -78,6 +84,22 @@ static int lua_check_stack(lua_State * L, int howm)
 	}
 	return 0;
 }
+
+#ifdef PRIVATE_ISINTEGER
+static int lua_isinteger(lua_State * L, int idx)
+{
+	int dtype;
+	lua_Number l_num;
+	lua_Integer l_int;
+
+	dtype = lua_type(L, idx);
+	if (dtype != LUA_TNUMBER)
+		return 0;
+	l_num = lua_tonumber(L, idx);
+	l_int = (lua_Integer) l_num;
+	return l_num == (lua_Number) l_int;
+}
+#endif
 
 static int system_invoke(lua_State * L)
 {
@@ -892,9 +914,407 @@ static int childproc_geteval(lua_State * L)
 	return 2;
 }
 
+static int system_sleep(lua_State * L)
+{
+	struct timespec tspec;
+	struct timespec rspec;
+	pthread_mutex_t * mutp;
+	int ret, delay, error, ntop;
+
+	error = 0;
+	mutp = NULL;
+	if (lua_check_stack(L, 3) < 0)
+		return 0;
+	ntop = lua_gettop(L);
+	if (ntop < 1 || lua_isinteger(L, 1) == 0) {
+		lua_pushnil(L);
+		lua_pushstring(L, "Error, invalid type of sleep second");
+		return 2;
+	}
+
+	delay = lua_tointeger(L, 1);
+	if (delay <= 0) {
+		lua_pushnil(L);
+		lua_pushfstring(L, "Error, invalid sleep second: %d", delay);
+		return 2;
+	}
+
+	if (ntop >= 2 && lua_type(L, 2) == LUA_TSTRING) {
+		const char * mptr;
+		unsigned long mutptr = 0;
+		mptr = lua_tolstring(L, 2, NULL);
+		if (mptr && mptr[0]) {
+			errno = 0;
+			mutptr = (unsigned long) strtoul(mptr, NULL, 0);
+			if (mutptr == ULONG_MAX || errno != 0) {
+				mutptr = 0;
+				fprintf(stderr, "Error, invalid mutex pointer: %s\n", mptr);
+				fflush(stderr);
+			}
+		}
+		mutp = (pthread_mutex_t *) mutptr;
+	}
+
+	ret = mutp ? pthread_mutex_lock(mutp) : 0;
+	if (__builtin_expect(ret != 0, 0)) {
+		fprintf(stderr, "Error, failed to acquire mutex[%p]: %d\n", mutp, ret);
+		fflush(stderr);
+		abort();
+	}
+
+	tspec.tv_sec = (time_t) delay;
+	tspec.tv_nsec = 0;
+	rspec.tv_sec = 0;
+	rspec.tv_nsec = 0;
+	clock_gettime(CLOCK_BOOTTIME, &rspec);
+	if (__builtin_expect(rspec.tv_nsec != 0, 1)) {
+		tspec.tv_sec--;
+		tspec.tv_nsec = 1000000000 - rspec.tv_nsec;
+	}
+
+	ret = nanosleep(&tspec, NULL);
+	if (ret == -1)
+		error = errno;
+
+	ret = mutp ? pthread_mutex_unlock(mutp) : 0;
+	if (__builtin_expect(ret != 0, 0)) {
+		fprintf(stderr, "Error, failed to release mutex[%p]: %d\n", mutp, ret);
+		fflush(stderr);
+		abort();
+	}
+
+	lua_pushinteger(L, error);
+	return 1;
+}
+
+static int system_msleep(lua_State * L)
+{
+	struct timespec tspec;
+	pthread_mutex_t * mutp;
+	int ret, delay, error, ntop;
+
+	error = 0;
+	mutp = NULL;
+	if (lua_check_stack(L, 3) < 0)
+		return 0;
+	ntop = lua_gettop(L);
+	if (ntop < 1 || lua_isinteger(L, 1) == 0) {
+		lua_pushnil(L);
+		lua_pushstring(L, "Error, invalid type of sleep msec");
+		return 2;
+	}
+
+	delay = lua_tointeger(L, 1);
+	if (delay <= 0) {
+		lua_pushnil(L);
+		lua_pushfstring(L, "Error, invalid sleep msec: %d", delay);
+		return 2;
+	}
+
+	if (ntop >= 2 && lua_type(L, 2) == LUA_TSTRING) {
+		const char * mptr;
+		unsigned long mutptr = 0;
+		mptr = lua_tolstring(L, 2, NULL);
+		if (mptr && mptr[0]) {
+			errno = 0;
+			mutptr = (unsigned long) strtoul(mptr, NULL, 0);
+			if (mutptr == ULONG_MAX || errno != 0) {
+				mutptr = 0;
+				fprintf(stderr, "Error, invalid mutex pointer: %s\n", mptr);
+				fflush(stderr);
+			}
+		}
+		mutp = (pthread_mutex_t *) mutptr;
+	}
+
+	ret = mutp ? pthread_mutex_lock(mutp) : 0;
+	if (__builtin_expect(ret != 0, 0)) {
+		fprintf(stderr, "Error, failed to acquire mutex[%p]: %d\n", mutp, ret);
+		fflush(stderr);
+		abort();
+	}
+
+	tspec.tv_sec = (time_t) (delay / 1000);
+	tspec.tv_nsec = (long) (1000000 * (delay % 1000));
+	ret = nanosleep(&tspec, NULL);
+	if (ret == -1)
+		error = errno;
+
+	ret = mutp ? pthread_mutex_unlock(mutp) : 0;
+	if (__builtin_expect(ret != 0, 0)) {
+		fprintf(stderr, "Error, failed to release mutex[%p]: %d\n", mutp, ret);
+		fflush(stderr);
+		abort();
+	}
+
+	lua_pushinteger(L, error);
+	return 1;
+}
+
+static int system_uptime(lua_State * L)
+{
+	int ret, error;
+	struct timespec tspec;
+
+	if (lua_check_stack(L, 3) < 0)
+		return 0;
+
+	tspec.tv_sec = 0;
+	tspec.tv_nsec = 0;
+	ret = clock_gettime(CLOCK_BOOTTIME, &tspec);
+	if (ret == -1) {
+		error = errno;
+		fprintf(stderr, "Error, failed to get system uptime: %s\n",
+			strerror(error));
+		fflush(stderr);
+	}
+
+	lua_pushinteger(L, (lua_Integer) tspec.tv_sec);
+	lua_pushinteger(L, (lua_Integer) tspec.tv_nsec);
+	return 2;
+}
+
+static int system_tcpsock(int * sockp, int ipv6)
+{
+	int error;
+	int sockfd;
+
+	sockfd = *sockp;
+	if (sockfd != -1) {
+		close(sockfd);
+		*sockp = -1;
+	}
+
+	sockfd = socket(ipv6 ? AF_INET6 : AF_INET,
+		SOCK_STREAM | SOCK_CLOEXEC, 0);
+	if (sockfd == -1) {
+		error = errno;
+		fprintf(stderr, "Error, failed to create TCP socket: %s\n",
+			strerror(error));
+		fflush(stderr);
+		errno = error;
+		return -1;
+	}
+
+	fdset_block(sockfd, 0);
+	*sockp = sockfd;
+	return 0;
+}
+
+static int system_tcpconn(const char * ipaddr, int portno,
+	const void * ipv4addr, const void * ipv6addr, int timeout)
+{
+	int sockfd;
+	int ret, error;
+	socklen_t socklen;
+	struct sockaddr_in v4addr;
+	struct sockaddr_in6 v6addr;
+
+	error = 0;
+	sockfd = -1;
+	socklen = 0;
+	memset(&v4addr, 0, sizeof(v4addr));
+	v4addr.sin_family = AF_INET;
+	v4addr.sin_port = htons((unsigned short) portno);
+
+	memset(&v6addr, 0, sizeof(v6addr));
+	v6addr.sin6_family = AF_INET6;
+	v6addr.sin6_port = htons((unsigned short) portno);
+
+	if (ipaddr != NULL) {
+		if (inet_pton(AF_INET, ipaddr, (void *) &v4addr.sin_addr) == 1) {
+			socklen = sizeof(v4addr);
+			system_tcpsock(&sockfd, 0);
+		} else if (inet_pton(AF_INET6, ipaddr, (void *) &v6addr.sin6_addr) == 1) {
+			socklen = sizeof(v6addr);
+			system_tcpsock(&sockfd, 1);
+		} else {
+			error = EADDRNOTAVAIL;
+			goto err0;
+		}
+	}
+
+	if (socklen)
+		goto docon;
+
+	if (ipv4addr != NULL) {
+		const struct sockaddr_in * addrp;
+		addrp = (const struct sockaddr_in *) ipv4addr;
+
+		socklen = sizeof(v4addr);
+		v4addr.sin_addr = addrp->sin_addr;
+		system_tcpsock(&sockfd, 0);
+	} else if (ipv6addr != NULL) {
+		const struct sockaddr_in6 * addrp;
+		addrp = (const struct sockaddr_in6 *) ipv6addr;
+
+		socklen = sizeof(v6addr);
+		v6addr.sin6_addr = addrp->sin6_addr;
+		system_tcpsock(&sockfd, 1);
+	} else {
+		error = EADDRNOTAVAIL;
+		goto err0;
+	}
+
+docon:
+	if (sockfd == -1) {
+		error = EBADF;
+		goto err0;
+	}
+
+	do {
+		const struct sockaddr * addrp;
+		addrp = (const struct sockaddr *) &v4addr;
+		if (socklen != sizeof(v4addr))
+			addrp = (const struct sockaddr *) &v6addr;
+		errno = 0;
+		ret = connect(sockfd, addrp, socklen);
+		error = errno;
+	} while (0);
+
+	if (ret == 0) {
+		error = 0;
+		goto err0;
+	}
+
+	if (error == ECONNREFUSED)
+		goto err0;
+	if (error == EINPROGRESS) {
+		int err_n, serror;
+		struct pollfd tfd;
+again:
+		tfd.fd = sockfd;
+		tfd.events = POLLOUT | POLLERR | POLLPRI;
+		tfd.revents = 0;
+
+		errno = 0;
+		ret = poll(&tfd, 1, timeout);
+		if (ret == 0) {
+			error = ETIMEDOUT;
+			goto err0;
+		}
+		if (ret == -1) {
+			err_n = errno;
+			if (err_n == EINTR)
+				goto again;
+
+			fprintf(stderr, "Error, poll on TCP connect has failed: %s\n",
+				strerror(err_n));
+			fflush(stderr);
+			error = err_n;
+			goto err0;
+		}
+
+		serror = 0;
+		socklen = sizeof(serror);
+		ret = getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &serror, &socklen);
+		if (ret == -1) {
+			err_n = errno;
+			fprintf(stderr, "Error, failed to retrieve socket error: %s\n",
+				strerror(err_n));
+			fflush(stderr);
+			error = err_n;
+			goto err0;
+		}
+		error = serror;
+	} else if (error != ENETUNREACH) {
+		fprintf(stderr, "Error, TCP connect has failed: %s\n",
+			strerror(error));
+		fflush(stderr);
+	}
+
+err0:
+	if (sockfd != -1)
+		close(sockfd);
+	return error;
+}
+
+static int system_tcpcheck(lua_State * L)
+{
+	const char * hostip;
+	struct addrinfo * i_info;
+	struct addrinfo * a_info;
+	int ntop, timeo, portn, rval;
+
+	rval = 0;
+	timeo = 2500; /* 2500 milliseconds */
+	i_info = a_info = NULL;
+	if (lua_check_stack(L, 3) < 0)
+		return 0;
+	ntop = lua_gettop(L);
+	if (ntop < 2 ||
+		lua_type(L, 1) != LUA_TSTRING ||
+		lua_isinteger(L, 2) == 0) {
+		lua_pushnil(L);
+		lua_pushfstring(L, "invalid type of arguments: %d, %d",
+			lua_type(L, 1), lua_type(L, 2));
+		return 2;
+	}
+
+	hostip = lua_tolstring(L, 1, NULL);
+	portn = lua_tointeger(L, 2);
+	if (hostip == NULL || hostip[0] == '\0' || portn <= 0 || portn >= 0xFFFF) {
+		lua_pushnil(L);
+		lua_pushfstring(L, "invalid host-ip or port-number: %d", portn);
+		return 2;
+	}
+
+	if (ntop >= 3 && lua_isinteger(L, 3))
+		timeo = lua_tointeger(L, 3);
+
+	rval = system_tcpconn(hostip, portn, NULL, NULL, timeo);
+	if (rval != EADDRNOTAVAIL) {
+		lua_pushinteger(L, rval);
+		return 1;
+	}
+
+	a_info = NULL;
+	rval = getaddrinfo(hostip, NULL, NULL, &a_info);
+	if (rval != 0) {
+		if (a_info != NULL) {
+			freeaddrinfo(a_info);
+			a_info = NULL;
+		}
+		lua_pushinteger(L, rval);
+		return 1;
+	}
+
+	rval = EADDRNOTAVAIL;
+	for (i_info = a_info; i_info != NULL; i_info = i_info->ai_next) {
+		int error;
+		if (i_info->ai_addrlen == sizeof(struct sockaddr_in)) {
+			error = system_tcpconn(NULL, portn, i_info->ai_addr, NULL, timeo);
+			rval = error;
+			if (error == 0 || error == ECONNREFUSED)
+				break;
+		} else if (i_info->ai_addrlen == sizeof(struct sockaddr_in6)) {
+			error = system_tcpconn(NULL, portn, NULL, i_info->ai_addr, timeo);
+			rval = error;
+			if (error == 0 || error == ECONNREFUSED)
+				break;
+		} else {
+			rval = EADDRNOTAVAIL;
+			fprintf(stderr, "Error, invalid ipaddr length: %d\n",
+				(int) i_info->ai_addrlen);
+			fflush(stderr);
+		}
+	}
+
+	if (a_info != NULL) {
+		freeaddrinfo(a_info);
+		a_info = NULL;
+	}
+	lua_pushinteger(L, rval);
+	return 1;
+}
+
 static const struct luaL_Reg system_funcs[] = {
 	{ "invoke",         system_invoke },
 	{ "setname",        system_setname },
+	{ "sleep",          system_sleep },
+	{ "msleep",         system_msleep },
+	{ "uptime",         system_uptime },
+	{ "tcpcheck",       system_tcpcheck },
 	{ NULL,             NULL },
 };
 
