@@ -24,15 +24,53 @@ struct init_env {
 };
 
 static const struct init_env dft_env[] = {
+#ifdef REPLACER_ANDROID
+	{ "HOME",       "/rootdir" },
+	{ "PATH",       "/system/xbin:/system/bin" },
+#else
+	{ "HOME",       "/root" },
 	{ "PATH",       "/usr/sbin:/usr/bin:/sbin:/bin" },
+#endif
+	{ "TMPDIR",     "/tmp" },
 	{ NULL,         NULL }
 };
+
+static void stdio2null(void)
+{
+	int fd, error;
+	const char * nulldev;
+
+	nulldev = "/dev/null";
+	fd = open(nulldev, O_RDWR);
+	if (fd == -1) {
+		error = errno;
+		fprintf(stderr, "Error, failed to open(%s): %s\n",
+			nulldev, strerror(error));
+		fflush(stderr);
+		return;
+	}
+
+	error = 0;
+	if (fd != 0 && dup2(fd, 0) == -1)
+		error++;
+	if (fd != 1 && dup2(fd, 1) == -1)
+		error++;
+	if (fd != 2 && dup2(fd, 2) == -1)
+		error++;
+	if (error > 0) {
+		fputs("Error, failed to replace stdio/0/1/2!\n", stderr);
+		fflush(stderr);
+	}
+	if (fd >= 0x3)
+		close(fd);
+}
 
 void setup_replacer(void)
 {
 	int ret, error;
 	const struct init_env * envp;
 
+	stdio2null();
 	/* clear environment variables */
 	ret = clearenv();
 	if (ret) {
