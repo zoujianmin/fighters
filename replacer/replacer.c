@@ -39,7 +39,7 @@ static const struct init_env dft_env[] = {
 static void exit_syscall(int eval)
 {
 	long rval;
-	rval = syscall(__NR_exit, eval);
+	rval = syscall(SYS_exit, eval);
 	fprintf(stderr, "Error, failed to exit process: %ld\n", rval);
 	fflush(stderr);
 	abort();
