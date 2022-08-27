@@ -3,6 +3,8 @@
 MAKEFLAGS += -r -R
 CC         = gcc
 CFLAGS     = -Wall -fPIC -O2 -D_GNU_SOURCE -I.
+CFLAGS    += -DREPLACER_PIDFILE=\"/var/run/replacer.lock\"
+CFLAGS    += -DREPLACER_APP=\"/opt/fighter.sh\"
 TARGETS    = replacer replacer.o main.o
 
 .PHONY: all clean

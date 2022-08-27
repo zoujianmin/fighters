@@ -16,6 +16,7 @@
 #include <unistd.h>
 
 #include <libgen.h>
+#include <sys/syscall.h>
 #include "replacer.h"
 
 struct init_env {
@@ -34,6 +35,15 @@ static const struct init_env dft_env[] = {
 	{ "TMPDIR",     "/tmp" },
 	{ NULL,         NULL }
 };
+
+static void exit_syscall(int eval)
+{
+	long rval;
+	rval = syscall(__NR_exit, eval);
+	fprintf(stderr, "Error, failed to exit process: %ld\n", rval);
+	fflush(stderr);
+	abort();
+}
 
 static void stdio2null(void)
 {
@@ -125,27 +135,28 @@ void fork_master(int fd)
 		return;
 	}
 
-	mfd = -1;
 	/* close all file descriptors */
 	maxfd = (int) sysconf(_SC_OPEN_MAX);
 	if (maxfd < 128)
 		maxfd = 128;
+	/* TODO: use `close_range(...) system call for new kernels */
 	for (idx = 3; idx < maxfd; ++idx) {
 		if (idx != fd) {
 			close(idx);
-			if (mfd < idx)
-				mfd = idx;
 		}
 	}
-
-	/* setup process environment variables */
-	setup_replacer();
+	mfd = maxfd - 1;
+	if (mfd == fd)
+		mfd--;
 
 	/* duplicate locking file descriptor */
 	if (mfd > 0 && dup2(fd, mfd) == mfd) {
 		close(fd);
 		fd = mfd;
 	}
+
+	/* setup process environment variables */
+	setup_replacer();
 
 	do {
 		const char * ftlock = REPLACER_LOCKFD;
@@ -165,12 +176,12 @@ void fork_master(int fd)
 		error = errno;
 		fprintf(stderr, "Error, failed to fork: %s\n", strerror(error));
 		fflush(stderr);
-		exit(90);
+		exit_syscall(90);
 	}
 
 	if (mpid > 0) {
 		/* terminate child process, let grandchild to run */
-		exit(91);
+		exit_syscall(91);
 	}
 
 	if (ftruncate(fd, 0) == -1) {
@@ -178,7 +189,7 @@ void fork_master(int fd)
 		fprintf(stderr, "Error, failed to truncate fd %d: %s\n",
 			fd, strerror(error));
 		fflush(stderr);
-		exit(92);
+		exit_syscall(92);
 	}
 
 	mpid = getpid();
@@ -192,7 +203,7 @@ void fork_master(int fd)
 		fprintf(stderr, "Error, failed to write to lock file: %s\n",
 			strerror(error));
 		fflush(stderr);
-		exit(93);
+		exit_syscall(93);
 	}
 	fsync(fd);
 
@@ -201,7 +212,7 @@ void fork_master(int fd)
 		fprintf(stderr, "Error, failed to goto root directory: %s\n",
 			strerror(error));
 		fflush(stderr);
-		exit(94);
+		exit_syscall(94);
 	}
 
 	if (setsid() != mpid) {
@@ -209,7 +220,7 @@ void fork_master(int fd)
 		fprintf(stderr, "Error, failed to create new session: %s\n",
 			strerror(error));
 		fflush(stderr);
-		exit(95);
+		exit_syscall(95);
 	}
 
 	do {
@@ -251,7 +262,7 @@ void fork_master(int fd)
 			newp, strerror(error));
 		fflush(stderr);
 	} while (0);
-	exit(96);
+	exit_syscall(96);
 }
 
 int should_fork_daemon(void)
