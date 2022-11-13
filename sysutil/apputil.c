@@ -153,9 +153,9 @@ int appu_cloexec(int fd, int cloexec, int verbose)
 
 	flags = ret;
 	if (cloexec != 0)
-		flags |= O_CLOEXEC;
+		flags |= FD_CLOEXEC;
 	else
-		flags &= ~O_CLOEXEC;
+		flags &= ~FD_CLOEXEC;
 	if (ret == flags)
 		return 0;
 
