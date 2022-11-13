@@ -21,7 +21,6 @@
 #ifndef COMMON_HASH_H
 #define COMMON_HASH_H 1
 
-#include <uthash.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -45,28 +44,20 @@ static inline void cm_hval_init(union cm_hval * cmp)
 	cmp->cm_uint64 = 0ull;
 }
 
-/*
- * common hash structure definition
- */
-struct cmhash {
-	unsigned char *       cm_key;    /* pointer to private copy of hash-key buffer */
-	unsigned int          cm_klen;   /* length of hash key in bytes */
-	union cm_hval         cm_val;    /* simple hashed value */
-	UT_hash_handle        cm_hh;     /* hash structure from uthash */
-};
+typedef void * cmhash_t;
 
-int cmhash_getval(struct cmhash * chash,
+int cmhash_getval(cmhash_t chash,
 	const void * cmkey, unsigned int cmlen,
 	union cm_hval * valp);
 
-int cmhash_addval(struct cmhash * * chash,
+int cmhash_addval(cmhash_t * chash,
 	const void * cmkey, unsigned int cmlen,
 	const union cm_hval * valp, union cm_hval * oldval);
 
-int cmhash_delval(struct cmhash * * chash,
+int cmhash_delval(cmhash_t * chash,
 	const void * cmkey, unsigned int cmlen);
 
-void cmhash_delete(struct cmhash * * chash);
+void cmhash_delete(cmhash_t * chash);
 
 /*
  * Iterate over the hash set WITHOUT MODIFYING,
@@ -74,8 +65,8 @@ void cmhash_delete(struct cmhash * * chash);
  * Note that if `iter_func returns negative value,
  * the iteration will stop.
  */
-int cmhash_iter(struct cmhash * chash, void * ppriv,
-	int (* iter_func)(int, const struct cmhash *, void *));
+int cmhash_iter(cmhash_t chash, void * ppriv,
+	int (* iter_func)(int, const cmhash_t, void *));
 
 #ifdef __cplusplus
 };

@@ -19,13 +19,25 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <uthash.h>
 #include "cmhash.h"
 
-int cmhash_getval(struct cmhash * chash,
+/*
+ * common hash structure definition
+ */
+struct cmhash {
+	unsigned char *       cm_key;    /* pointer to private copy of hash-key buffer */
+	unsigned int          cm_klen;   /* length of hash key in bytes */
+	union cm_hval         cm_val;    /* simple hashed value */
+	UT_hash_handle        cm_hh;     /* hash structure from uthash */
+};
+
+int cmhash_getval(cmhash_t chash_,
 	const void * cmkey, unsigned int cmlen,
 	union cm_hval * valp)
 {
 	struct cmhash * hashptr;
+	struct cmhash * chash = (struct cmhash *) chash_;
 
 	hashptr = NULL;
 	if (chash == NULL || cmkey == NULL || cmlen == 0) {
@@ -43,12 +55,13 @@ int cmhash_getval(struct cmhash * chash,
 	return 0;
 }
 
-int cmhash_addval(struct cmhash * * chash,
+int cmhash_addval(cmhash_t * chash_,
 	const void * cmkey, unsigned int cmlen,
 	const union cm_hval * valp, union cm_hval * oldval)
 {
 	struct cmhash * newhash;
 	struct cmhash * hashptr, * oldhash;
+	struct cmhash * * chash = (struct cmhash * *) chash_;
 
 	newhash = NULL;
 	if (chash == NULL || cmkey == NULL ||
@@ -92,11 +105,12 @@ int cmhash_addval(struct cmhash * * chash,
 	return 0;
 }
 
-int cmhash_delval(struct cmhash * * chash,
+int cmhash_delval(cmhash_t * chash_,
 	const void * cmkey, unsigned int cmlen)
 {
 	struct cmhash * delhash;
 	struct cmhash * hashptr, * oldhash;
+	struct cmhash * * chash = (struct cmhash * *) chash_;
 
 	delhash = NULL;
 	if (chash == NULL || cmkey == NULL || cmlen == 0) {
@@ -125,12 +139,13 @@ int cmhash_delval(struct cmhash * * chash,
 	return 0;
 }
 
-int cmhash_iter(struct cmhash * chash, void * ppriv,
-	int (* iter_func)(int, const struct cmhash *, void *))
+int cmhash_iter(cmhash_t chash_, void * ppriv,
+	int (* iter_func)(int, const cmhash_t, void *))
 {
 	int count = 0;
 	struct cmhash * iterhash = NULL;
 	struct cmhash * temphash = NULL;
+	struct cmhash * chash = (struct cmhash *) chash_;
 
 	if (chash == NULL || iter_func == NULL)
 		return -EINVAL;
@@ -142,10 +157,11 @@ int cmhash_iter(struct cmhash * chash, void * ppriv,
 	return 0;
 }
 
-void cmhash_delete(struct cmhash * * chash)
+void cmhash_delete(cmhash_t * chash_)
 {
 	struct cmhash * hashptr, * oldhash;
 	struct cmhash * iterhash, * temphash;
+	struct cmhash * * chash = (struct cmhash * *) chash_;
 
 	iterhash = temphash = NULL;
 	hashptr = (chash != NULL) ? *chash : NULL;
