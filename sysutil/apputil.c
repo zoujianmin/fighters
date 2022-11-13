@@ -23,6 +23,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <signal.h>
+#include <sys/syscall.h>
 
 #include "apputil.h"
 
@@ -46,6 +47,51 @@ struct apputil {
 		close(pfd_); \
 		pfd_ = -1; \
 	}
+
+#ifndef __NR_close_range
+#define __NR_close_range -1l
+#warning Define __NR_close_range to minus one
+#endif
+#ifndef CLOSE_RANGE_UNSHARE
+#define CLOSE_RANGE_UNSHARE 0x02
+#endif
+#ifndef CLOSE_RANGE_CLOEXEC
+#define CLOSE_RANGE_CLOEXEC 0x04
+#endif
+int appu_closefds(int fd, int maxfd, int crflags)
+{
+	long sysno;
+	int rval, error, ifd;
+
+	errno = 0;
+	sysno = __NR_close_range;
+#if 0
+	if (sysno == -1l)
+		goto slow_close;
+#endif
+	rval = syscall(sysno, fd, maxfd, crflags);
+	if (rval < 0) {
+		error = errno;
+		if (error == ENOSYS)
+			goto slow_close;
+		fprintf(stderr, "Error, close_range(%d, %d) has failed: %s\n",
+			fd, maxfd, strerror(error));
+		fflush(stderr);
+		errno = error;
+		return -1;
+	}
+	return 0;
+
+slow_close:
+	if (crflags & CLOSE_RANGE_CLOEXEC) {
+		for (ifd = fd; ifd < maxfd; ++ifd)
+			appu_cloexec(ifd, 1, 0);
+	} else {
+		for (ifd = fd; ifd < maxfd; ++ifd)
+			close(ifd);
+	}
+	return 0;
+}
 
 static void close_pipe_fds(int * pfds)
 {
@@ -92,19 +138,20 @@ err0:
 	return 0;
 }
 
-int appu_cloexec(int fd, int cloexec)
+int appu_cloexec(int fd, int cloexec, int verbose)
 {
-	int error = 0;
+	int error;
 	int ret, flags;
 
 	ret = fcntl(fd, F_GETFD, 0);
 	if (ret == -1) {
-		error = errno;
-err0:
-		fprintf(stderr, "Error, fcntl(%d, F_GETFD) has failed: %s\n",
-			fd, strerror(error));
-		fflush(stderr);
-		errno = error;
+		if (verbose) {
+			error = errno;
+			fprintf(stderr, "Error, fcntl(%d, F_GETFD) has failed: %s\n",
+				fd, strerror(error));
+			fflush(stderr);
+			errno = error;
+		}
 		return -1;
 	}
 
@@ -118,8 +165,14 @@ err0:
 
 	ret = fcntl(fd, F_SETFD, flags);
 	if (ret == -1) {
-		error = errno;
-		goto err0;
+		if (verbose) {
+			error = errno;
+			fprintf(stderr, "Error, fcntl(%d, F_SETFD, %#x) has failed: %s\n",
+				fd, (unsigned int) flags, strerror(error));
+			fflush(stderr);
+			errno = error;
+		}
+		return -1;
 	}
 	return 0;
 }
@@ -164,9 +217,9 @@ int appu_zipstdio(void)
 			error += dup2(nfd, STDERR_FILENO) == -1;
 		if (nfd > STDERR_FILENO)
 			close(nfd);
-		appu_cloexec(STDIN_FILENO, 0);
-		appu_cloexec(STDOUT_FILENO, 0);
-		appu_cloexec(STDERR_FILENO, 0);
+		appu_cloexec(STDIN_FILENO, 0, 1);
+		appu_cloexec(STDOUT_FILENO, 0, 1);
+		appu_cloexec(STDERR_FILENO, 0, 1);
 		if (error > 0)
 			return -1;
 		return 0;
@@ -431,7 +484,7 @@ int apputil_call(apputil_t app_, const void * indata, unsigned int inlen)
 				}
 				APPUTIL_CLOSE(infd[0]);
 			}
-			appu_cloexec(STDIN_FILENO, 0);
+			appu_cloexec(STDIN_FILENO, 0, 1);
 			appu_fdblock(STDIN_FILENO, write0 == 0);
 		}
 
@@ -447,7 +500,7 @@ int apputil_call(apputil_t app_, const void * indata, unsigned int inlen)
 				}
 				APPUTIL_CLOSE(outfd[1]);
 			}
-			appu_cloexec(STDOUT_FILENO, 0);
+			appu_cloexec(STDOUT_FILENO, 0, 1);
 		}
 
 		if (opts & APPUTIL_OPTION_OUTALL) {
@@ -459,7 +512,15 @@ int apputil_call(apputil_t app_, const void * indata, unsigned int inlen)
 				fflush(stderr);
 				_exit(93);
 			}
-			appu_cloexec(STDERR_FILENO, 0);
+			appu_cloexec(STDERR_FILENO, 0, 1);
+		}
+
+		if (opts & APPUTIL_OPTION_CLOSEFDS) {
+			int startfd = STDERR_FILENO + 1;
+			long maxfd = sysconf(_SC_OPEN_MAX);
+			if (maxfd <= startfd)
+				maxfd = 1024;
+			appu_closefds(startfd, maxfd, CLOSE_RANGE_CLOEXEC);
 		}
 
 		newapp = app->appargs[0];

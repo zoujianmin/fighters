@@ -655,6 +655,9 @@ int luaopen_sysutil(lua_State * L)
 	lua_pushinteger(L, APPUTIL_OPTION_NOWAIT);
 	lua_setfield(L, -2, "OPT_NOWAIT");
 
+	lua_pushinteger(L, APPUTIL_OPTION_CLOSEFDS);
+	lua_setfield(L, -2, "OPT_CLOSEFDS");
+
 	lua_pushinteger(L, APPUTIL_OPTION_LOWPRI);
 	lua_setfield(L, -2, "OPT_LOWPRI");
 	return 1;

@@ -28,9 +28,10 @@ extern "C" {
 #endif
 
 int appu_fdblock(int fd, int blocking) APPUTIL_ATTR;
-int appu_cloexec(int fd, int cloexec) APPUTIL_ATTR;
+int appu_cloexec(int fd, int cloexec, int verbose) APPUTIL_ATTR;
 int appu_pipesize(int fd, int maxSize) APPUTIL_ATTR;
 int appu_zipstdio(void) APPUTIL_ATTR;
+int appu_closefds(int fd, int maxfd, int crflags) APPUTIL_ATTR;
 
 #define APPUTIL_DFTARGS          8
 #define APPUTIL_MAXARGS          64
@@ -39,7 +40,8 @@ int appu_zipstdio(void) APPUTIL_ATTR;
 #define APPUTIL_OPTION_OUTPUT    0x04
 #define APPUTIL_OPTION_OUTALL    0x08
 #define APPUTIL_OPTION_NOWAIT    0x10
-#define APPUTIL_OPTION_LOWPRI    0x20
+#define APPUTIL_OPTION_CLOSEFDS  0x20
+#define APPUTIL_OPTION_LOWPRI    0x40
 #define APPUTIL_PIPE_MASK        0x7FFF0000
 #define APPUTIL_BUFSIZE          0x8000 /* 32K */
 
