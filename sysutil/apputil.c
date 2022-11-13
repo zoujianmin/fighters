@@ -65,14 +65,10 @@ int appu_closefds(int fd, int maxfd, int crflags)
 
 	errno = 0;
 	sysno = __NR_close_range;
-#if 0
-	if (sysno == -1l)
-		goto slow_close;
-#endif
 	rval = syscall(sysno, fd, maxfd, crflags);
 	if (rval < 0) {
 		error = errno;
-		if (error == ENOSYS)
+		if (error == ENOSYS || error == EINVAL)
 			goto slow_close;
 		fprintf(stderr, "Error, close_range(%d, %d) has failed: %s\n",
 			fd, maxfd, strerror(error));
