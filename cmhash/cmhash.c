@@ -106,7 +106,8 @@ int cmhash_addval(cmhash_t * chash_,
 }
 
 int cmhash_delval(cmhash_t * chash_,
-	const void * cmkey, unsigned int cmlen)
+	const void * cmkey, unsigned int cmlen,
+	union cm_hval * oldval)
 {
 	struct cmhash * delhash;
 	struct cmhash * hashptr, * oldhash;
@@ -131,6 +132,8 @@ int cmhash_delval(cmhash_t * chash_,
 	HASH_DELETE(cm_hh, hashptr, delhash);
 	delhash->cm_key = NULL;
 	delhash->cm_klen = 0;
+	if (oldval != NULL)
+		*oldval = delhash->cm_val;
 	delhash->cm_val.cm_uint64 = 0ull;
 	free(delhash);
 

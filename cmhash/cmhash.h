@@ -55,7 +55,8 @@ int cmhash_addval(cmhash_t * chash,
 	const union cm_hval * valp, union cm_hval * oldval);
 
 int cmhash_delval(cmhash_t * chash,
-	const void * cmkey, unsigned int cmlen);
+	const void * cmkey, unsigned int cmlen,
+	union cm_hval * oldval);
 
 void cmhash_delete(cmhash_t * chash);
 

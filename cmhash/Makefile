@@ -16,13 +16,16 @@ MAKEFLAGS += -r -R
 CC         = gcc
 STRIP      = strip
 CFLAGS     = -Wall -fPIC -D_GNU_SOURCE -ggdb -Os -I.
-TARGETS    = cmhash.o
+TARGETS    = cmhash.o test-cmhash.o test-cmhash
 
 .PHONY: all clean
 all: $(TARGETS)
+
+test-cmhash: test-cmhash.o cmhash.o
+	$(CC) -o $@ $^
 
 %.o: %.c cmhash.h uthash.h
 	$(CC) -c $(CFLAGS) -o $@ $<
 
 clean:
-	rm -rf *.o *.so
+	rm -rf *.o $(TARGETS)
