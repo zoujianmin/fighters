@@ -20,6 +20,8 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <poll.h>
 #include <fcntl.h>
@@ -33,6 +35,7 @@
 #include <lua.h>
 #include <lauxlib.h>
 #include "apputil.h"
+#include "zsha256_util.h"
 
 extern int luaopen_sysutil(lua_State * L);
 
@@ -363,10 +366,10 @@ static int sysutil_setname(lua_State * L)
 	char thname[20];
 	const char * tname = NULL;
 
-	ntop = lua_gettop(L);
 	if (sysutil_checkstack(L, 2) < 0)
 		return 0;
 
+	ntop = lua_gettop(L);
 	if (ntop >= 1 && lua_type(L, 1) == LUA_TSTRING)
 		tname = lua_tolstring(L, 1, NULL);
 	if (tname == NULL || tname[0] == '\0') {
@@ -402,7 +405,7 @@ static int system_tcpsock(int * sockp, int ipv6)
 	}
 
 	sockfd = socket(ipv6 ? AF_INET6 : AF_INET,
-		SOCK_STREAM | SOCK_CLOEXEC, 0);
+		SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, IPPROTO_TCP);
 	if (sockfd == -1) {
 		error = errno;
 		fprintf(stderr, "Error, failed to create TCP socket: %s\n",
@@ -412,7 +415,6 @@ static int system_tcpsock(int * sockp, int ipv6)
 		return -1;
 	}
 
-	appu_fdblock(sockfd, 0);
 	*sockp = sockfd;
 	return 0;
 }
@@ -626,13 +628,335 @@ static int sysutil_tcpcheck(lua_State * L)
 	return 1;
 }
 
+static int sysutil_mountpoint(lua_State * L)
+{
+	int ntop;
+	size_t mlen;
+	const char * mpath;
+
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+	ntop = lua_gettop(L);
+	if (ntop <= 0 || lua_type(L, 1) != LUA_TSTRING) {
+err0:
+		lua_pushnil(L);
+		lua_pushstring(L, "invalid argument for mountpoint");
+		return 2;
+	}
+
+	mlen = 0;
+	mpath = lua_tolstring(L, 1, &mlen);
+	if (mpath == NULL || mlen == 0)
+		goto err0;
+	lua_pushboolean(L, appf_mountpoint(mpath) == 0);
+	return 1;
+}
+
+static int sysutil_read(lua_State * L)
+{
+	ssize_t rl1;
+	lua_Integer luai;
+	size_t flen, maxlen;
+	unsigned char * fild;
+	int ntop, fd, isfile;
+
+	fd = -1;
+	flen = 0;
+	luai = 0;
+	isfile = 0;
+	fild = NULL;
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	ntop = lua_gettop(L);
+	if (ntop < 1) {
+		lua_pushnil(L);
+		lua_pushstring(L, "no valid argument given");
+		return 2;
+	}
+
+	if (lua_type(L, 1) == LUA_TSTRING) {
+		const char * filp;
+		filp = lua_tolstring(L, 1, NULL);
+		if (filp == NULL || filp[0] == '\0') {
+			lua_pushnil(L);
+			lua_pushstring(L, "invalid path of file to read");
+			return 2;
+		}
+
+		isfile = -1;
+		fd = open(filp, O_RDONLY | O_CLOEXEC);
+		if (fd == -1) {
+			int error = errno;
+			lua_pushnil(L);
+			lua_pushfstring(L, "failed to open '%s': %s\n",
+				filp, strerror(error));
+			return 2;
+		}
+	} else if (sysutil_isinteger(L, 1, &luai)) {
+		isfile = 0;
+		fd = (int) luai;
+	}
+
+	if (fd < 0) {
+		lua_pushnil(L);
+		lua_pushstring(L, "not a valid file descriptor");
+		return 2;
+	}
+
+	luai = 0;
+	if (ntop >= 2 && sysutil_isinteger(L, 2, &luai)) {
+		flen = (size_t) luai;
+	} else if (isfile) {
+		struct stat fst;
+		if (fstat(fd, &fst) == 0)
+			flen = (size_t) fst.st_size;
+	}
+
+	luai = 0;
+	maxlen = 256 * 1024 * 1024; /* 256MB */
+	if (flen >= 3 && sysutil_isinteger(L, 3, &luai))
+		maxlen = (size_t) luai;
+	if (flen > maxlen)
+		flen = maxlen;
+
+	/* should not read zero length of data */
+	if (flen == 0) {
+		if (isfile)
+			close(fd);
+		lua_pushnil(L);
+		lua_pushstring(L, "zero length of file to read");
+		return 2;
+	}
+
+	fild = (unsigned char *) malloc(flen);
+	if (fild == NULL) {
+		if (isfile)
+			close(fd);
+		lua_pushnil(L);
+		lua_pushstring(L, "system out of memory");
+		return 2;
+	}
+
+	rl1 = read(fd, fild, flen);
+	if (rl1 <= 0) {
+		int error = errno;
+		if (isfile)
+			close(fd);
+		free(fild);
+		lua_pushnil(L);
+		lua_pushfstring(L, "failed to read from %d: %s\n",
+			fd, strerror(error));
+		return 2;
+	}
+
+	if (isfile)
+		close(fd);
+	lua_pushlstring(L, (const char *) fild, (size_t) rl1);
+	free(fild);
+	return 1;
+}
+
+static int sysutil_waitpid(lua_State * L)
+{
+	pid_t pid, pid1;
+	lua_Integer luai;
+	int ntop, nohang, est;
+
+	pid = 0;
+	nohang = 0;
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	luai = 0;
+	ntop = lua_gettop(L);
+	if (ntop >= 1 && sysutil_isinteger(L, 1, &luai))
+		pid = (pid_t) luai;
+	if (pid <= 0l) {
+		lua_pushnil(L);
+		lua_pushstring(L, "invalid PID given to waitpid");
+		return 2;
+	}
+
+	if (ntop >= 2 &&
+		lua_type(L, 2) == LUA_TBOOLEAN &&
+		lua_toboolean(L, 2))
+		nohang = WNOHANG;
+
+again:
+	est = 0;
+	pid1 = waitpid(pid, &est, nohang);
+	if (pid1 < 0) {
+		int error = errno;
+		if (error == EINTR && !nohang)
+			goto again;
+		lua_pushnil(L);
+		lua_pushfstring(L, "failed to waitpid '%d': %s",
+			(int) pid, strerror(error));
+		return 2;
+	}
+
+	if (pid1 == pid) {
+		/* child process not running */
+		lua_pushboolean(L, 0);
+		lua_pushinteger(L, est);
+		return 2;
+	}
+
+	/* child process happily running */
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+static int sysutil_kill(lua_State * L)
+{
+	pid_t pid;
+	int ntop, signo;
+	lua_Integer luai;
+
+	pid = 0;
+	signo = 0;
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	luai = 0;
+	ntop = lua_gettop(L);
+	if (ntop >= 1 && sysutil_isinteger(L, 1, &luai))
+		pid = (pid_t) luai;
+	else {
+		lua_pushnil(L);
+		lua_pushstring(L, "PID not given for killing");
+		return 2;
+	}
+
+	luai = 0;
+	if (ntop >= 2 && sysutil_isinteger(L, 2, &luai))
+		signo = (int) luai;
+	if (kill(pid, signo) == -1) {
+		int error = errno;
+		lua_pushnil(L);
+		lua_pushfstring(L, "kill(%d, %d) has failed: %s",
+			(int) pid, signo, strerror(error));
+		return 2;
+	}
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+static int sysutil_sha256(lua_State * L)
+{
+	size_t flen;
+	int ntop, isfile;
+	const char * filp;
+	struct zsha256 sha256;
+
+	flen = 0;
+	filp = NULL;
+	isfile = 0;
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	ntop = lua_gettop(L);
+	if (ntop >= 1 && lua_type(L, 1) == LUA_TSTRING)
+		filp = lua_tolstring(L, 1, &flen);
+	if (ntop >= 2 && lua_type(L, 2) == LUA_TBOOLEAN)
+		isfile = lua_toboolean(L, 2);
+
+	if (isfile && (filp == NULL || flen == 0)) {
+		lua_pushnil(L);
+		lua_pushstring(L, "invalid argument for sha256");
+		return 2;
+	}
+
+	zsha256_init(&sha256);
+	if (isfile) {
+		int fd, error;
+		unsigned char * bufp;
+		const size_t rsize = 1024 * 1024;
+
+		fd = open(filp, O_RDONLY | O_CLOEXEC);
+		if (fd == -1) {
+			error = errno;
+			lua_pushnil(L);
+			lua_pushfstring(L, "Error, failed to open(%s): %s",
+				filp, strerror(error));
+			return 2;
+		}
+
+		bufp = (unsigned char *) malloc(rsize);
+		if (bufp == NULL) {
+			close(fd);
+			lua_pushnil(L);
+			lua_pushstring(L, "System out of memory");
+			return 2;
+		}
+
+		for (;;) {
+			size_t rl1;
+			rl1 = read(fd, bufp, rsize);
+			if (rl1 < 0) {
+				error = errno;
+				fprintf(stderr, "Error, failed to read %s: %s\n",
+					filp, strerror(error));
+				fflush(stderr);
+				break;
+			}
+
+			if (rl1 == 0)
+				break;
+			zsha256_update(&sha256, bufp, (unsigned int) rl1);
+			if (rl1 != (ssize_t) rsize)
+				break;
+		}
+
+		close(fd);
+		free(bufp);
+	} else {
+		zsha256_update(&sha256,
+			(const unsigned char *) filp, (unsigned int) flen);
+	}
+
+	zsha256_final(&sha256, NULL, 0);
+	if (ntop >= 3 &&
+		lua_type(L, 3) == LUA_TBOOLEAN &&
+		lua_toboolean(L, 3)) {
+		char out[ZSHA256_STRSIZE];
+		memset(out, 0, sizeof(out));
+		zsha256_hex(out, sizeof(out), &sha256);
+		lua_pushstring(L, out);
+		return 1;
+	}
+
+	lua_pushlstring(L, (const char *) sha256.hashval, 32);
+	return 1;
+}
+
+static int sysutil_zipstdio(lua_State * L)
+{
+	int ntop;
+	const char * pdev;
+
+	pdev = NULL;
+	ntop = lua_gettop(L);
+	if (ntop >= 1 && lua_type(L, 1) == LUA_TSTRING)
+		pdev = lua_tolstring(L, 1, NULL);
+	lua_pushboolean(L, appf_zipstdio(pdev, 0) == 0);
+	return 1;
+}
+
 static const luaL_Reg sysutil_regs[] = {
 	{ "call",           sysutil_call },
 	{ "delay",          sysutil_delay },
+	{ "kill",           sysutil_kill },
 	{ "mdelay",         sysutil_mdelay },
+	{ "mountpoint",     sysutil_mountpoint },
+	{ "read",           sysutil_read },
 	{ "setname",        sysutil_setname },
+	{ "sha256",         sysutil_sha256 },
 	{ "tcpcheck",       sysutil_tcpcheck },
 	{ "uptime",         sysutil_uptime },
+	{ "waitpid",        sysutil_waitpid },
+	{ "zipstdio",       sysutil_zipstdio },
 	{ NULL,             NULL },
 };
 
@@ -655,8 +979,8 @@ int luaopen_sysutil(lua_State * L)
 	lua_pushinteger(L, APPUTIL_OPTION_NOWAIT);
 	lua_setfield(L, -2, "OPT_NOWAIT");
 
-	lua_pushinteger(L, APPUTIL_OPTION_CLOSEFDS);
-	lua_setfield(L, -2, "OPT_CLOSEFDS");
+	lua_pushinteger(L, APPUTIL_OPTION_CLOSER);
+	lua_setfield(L, -2, "OPT_CLOSER");
 
 	lua_pushinteger(L, APPUTIL_OPTION_LOWPRI);
 	lua_setfield(L, -2, "OPT_LOWPRI");

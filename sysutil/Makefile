@@ -23,11 +23,11 @@ TARGETS    = apputil.o sysutil.so sysutil.o zsha256_util.o zsha256_test.o zsha25
 .PHONY: all clean
 all: $(TARGETS)
 
-sysutil.so: sysutil.o apputil.o
+sysutil.so: sysutil.o apputil.o zsha256_util.o
 	$(CC) -shared -o $@ $^
 	$(STRIP) -s $@
 
-zsha256: zsha256_test.o zsha256_util.o
+zsha256: zsha256_test.o zsha256_util.o apputil.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 %.o: %.c apputil.h

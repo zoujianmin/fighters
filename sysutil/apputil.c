@@ -20,9 +20,12 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <signal.h>
+
+#include <sched.h>
 #include <sys/syscall.h>
 
 #include "apputil.h"
@@ -48,27 +51,135 @@ struct apputil {
 		pfd_ = -1; \
 	}
 
-#ifndef __NR_close_range
-#define __NR_close_range -1l
-#warning Define __NR_close_range to minus one
+unsigned char * appf_readfile(const char * filp,
+	unsigned int maxsize, unsigned int * filesize, int verb)
+{
+	int error;
+	int fd, ret;
+	ssize_t rl1;
+	struct stat fst;
+	unsigned int rsize;
+	unsigned char * rbuf;
+
+	fd = -1;
+	error = 0;
+	rbuf = NULL;
+	ret = stat(filp, &fst);
+	if (ret == -1) {
+		if (verb) {
+			error = errno;
+			fprintf(stderr, "Error, failed to stat(%p): %s\n",
+				filp ? : "unknown", strerror(error));
+			fflush(stderr);
+			errno = error;
+		}
+		return NULL;
+	}
+
+	if (!S_ISREG(fst.st_mode)) {
+		error = ENOENT;
+		if (verb) {
+			fprintf(stderr, "Error, not a regular file: %s\n", filp);
+			fflush(stderr);
+		}
+		errno = error;
+		return NULL;
+	}
+
+	rsize = maxsize;
+	if (maxsize > (unsigned int) fst.st_size)
+		rsize = (unsigned int) fst.st_size;
+
+	fd = open(filp, O_RDONLY | O_CLOEXEC);
+	if (fd == -1) {
+		if (verb) {
+			error = errno;
+			fprintf(stderr, "Error, failed to open(%s): %s\n",
+				filp, strerror(error));
+			fflush(stderr);
+			errno = error;
+		}
+		return NULL;
+	}
+
+	rbuf = (unsigned char *) malloc((size_t) (rsize + 1));
+	if (rbuf == NULL) {
+		error = errno;
+		if (verb) {
+			fprintf(stderr, "Error, system out of memory: %u\n", rsize);
+			fflush(stderr);
+		}
+		close(fd);
+		errno = error;
+		return NULL;
+	}
+
+	rl1 = read(fd, rbuf, rsize);
+	if (rl1 == -1) {
+		error = errno;
+		if (verb) {
+			fprintf(stderr, "Error, failed to read(%p): %s\n",
+				filp, strerror(error));
+			fflush(stderr);
+		}
+		close(fd);
+		free(rbuf);
+		errno = error;
+		return NULL;
+	}
+
+	close(fd);
+	*filesize = (unsigned int) rl1;
+	rbuf[rl1] = (unsigned char) 0;
+	return rbuf;
+}
+
+int appf_mountpoint(const char * path)
+{
+	int ret;
+	char * newpath;
+	struct stat pst;
+	struct stat ppst;
+
+	newpath = NULL;
+	ret = stat(path, &pst);
+	if (ret == -1)
+		return -1;
+	if (!S_ISDIR(pst.st_mode))
+		return -2;
+
+	ret = asprintf(&newpath, "%s/..", path);
+	if (ret <= 0)
+		return -3;
+
+	ret = stat(newpath, &ppst);
+	free(newpath);
+	newpath = NULL;
+	if (ret == -1)
+		return -4;
+
+	if (pst.st_dev != ppst.st_dev)
+		return 0;
+	if (pst.st_ino == ppst.st_ino)
+		return 0;
+	return -5;
+}
+
+#ifndef SYS_close_range
+#define SYS_close_range -1l
+#warning Define SYS_close_range to minus one
 #endif
-#ifndef CLOSE_RANGE_UNSHARE
-#define CLOSE_RANGE_UNSHARE 0x02
-#endif
-#ifndef CLOSE_RANGE_CLOEXEC
-#define CLOSE_RANGE_CLOEXEC 0x04
-#endif
-int appu_closefds(int fd, int maxfd, int crflags)
+int appf_closefds(int fd, int maxfd, int verb)
 {
 	long sysno;
-	int rval, error, ifd;
+	int ret, error;
 
 	errno = 0;
-	sysno = __NR_close_range;
-	rval = syscall(sysno, fd, maxfd, crflags);
-	if (rval < 0) {
+	sysno = SYS_close_range;
+	ret = syscall(sysno, fd, maxfd, 0);
+	if (ret < 0) {
 		error = errno;
-		if (error == ENOSYS || error == EINVAL)
+		if (error == ENOSYS)
 			goto slow_close;
 		fprintf(stderr, "Error, close_range(%d, %d) has failed: %s\n",
 			fd, maxfd, strerror(error));
@@ -79,17 +190,14 @@ int appu_closefds(int fd, int maxfd, int crflags)
 	return 0;
 
 slow_close:
-	if (crflags & CLOSE_RANGE_CLOEXEC) {
-		for (ifd = fd; ifd < maxfd; ++ifd)
-			appu_cloexec(ifd, 1, 0);
-	} else {
-		for (ifd = fd; ifd < maxfd; ++ifd)
-			close(ifd);
+	while (fd < maxfd) {
+		close(fd);
+		fd++;
 	}
 	return 0;
 }
 
-static void close_pipe_fds(int * pfds)
+static void close_fd2(int * pfds)
 {
 	if (pfds[0] != -1) {
 		close(pfds[0]);
@@ -102,7 +210,7 @@ static void close_pipe_fds(int * pfds)
 	}
 }
 
-int appu_fdblock(int fd, int blocking)
+int appf_fdblock(int fd, int blocking, int verb)
 {
 	int error = 0;
 	int ret, flags;
@@ -111,9 +219,11 @@ int appu_fdblock(int fd, int blocking)
 	if (ret == -1) {
 		error = errno;
 err0:
-		fprintf(stderr, "Error, fcntl(%d, F_GETFL) has failed: %s\n",
-			fd, strerror(error));
-		fflush(stderr);
+		if (verb != 0) {
+			fprintf(stderr, "Error, fdblock(%d) has failed: %s\n",
+				fd, strerror(error));
+			fflush(stderr);
+		}
 		errno = error;
 		return -1;
 	}
@@ -134,16 +244,17 @@ err0:
 	return 0;
 }
 
-int appu_cloexec(int fd, int cloexec, int verbose)
+int appf_cloexec(int fd, int cloexec, int verb)
 {
 	int error;
 	int ret, flags;
 
 	ret = fcntl(fd, F_GETFD, 0);
 	if (ret == -1) {
-		if (verbose) {
+		if (verb != 0) {
 			error = errno;
-			fprintf(stderr, "Error, fcntl(%d, F_GETFD) has failed: %s\n",
+err0:
+			fprintf(stderr, "Error, cloexec(%d) has failed: %s\n",
 				fd, strerror(error));
 			fflush(stderr);
 			errno = error;
@@ -161,19 +272,16 @@ int appu_cloexec(int fd, int cloexec, int verbose)
 
 	ret = fcntl(fd, F_SETFD, flags);
 	if (ret == -1) {
-		if (verbose) {
+		if (verb != 0) {
 			error = errno;
-			fprintf(stderr, "Error, fcntl(%d, F_SETFD, %#x) has failed: %s\n",
-				fd, (unsigned int) flags, strerror(error));
-			fflush(stderr);
-			errno = error;
+			goto err0;
 		}
 		return -1;
 	}
 	return 0;
 }
 
-int appu_pipesize(int fd, int maxSize)
+int appf_pipesize(int fd, int maxSize, int verb)
 {
 	int error = 0;
 	int curSize, ret;
@@ -182,9 +290,12 @@ int appu_pipesize(int fd, int maxSize)
 	if (ret == -1) {
 		error = errno;
 err0:
-		fprintf(stderr, "Error, pipesize(%d) has failed: %s\n",
-			fd, strerror(error));
-		fflush(stderr);
+		if (verb != 0) {
+			fprintf(stderr, "Error, pipesize(%d) has failed: %s\n",
+				fd, strerror(error));
+			fflush(stderr);
+			errno = error;
+		}
 		return -1;
 	}
 
@@ -199,11 +310,13 @@ err0:
 	return maxSize;
 }
 
-int appu_zipstdio(void)
+int appf_zipstdio(const char * ndev, int verb)
 {
 	int nfd;
 	int error = 0;
-	nfd = open("/dev/null", O_RDWR | O_CLOEXEC);
+	if (ndev == NULL)
+		ndev = "/dev/null";
+	nfd = open(ndev, O_RDWR | O_CLOEXEC);
 	if (nfd >= 0) {
 		if (nfd != STDIN_FILENO)
 			error += dup2(nfd, STDIN_FILENO) == -1;
@@ -213,18 +326,21 @@ int appu_zipstdio(void)
 			error += dup2(nfd, STDERR_FILENO) == -1;
 		if (nfd > STDERR_FILENO)
 			close(nfd);
-		appu_cloexec(STDIN_FILENO, 0, 1);
-		appu_cloexec(STDOUT_FILENO, 0, 1);
-		appu_cloexec(STDERR_FILENO, 0, 1);
+		appf_cloexec(STDIN_FILENO, 0, verb);
+		appf_cloexec(STDOUT_FILENO, 0, verb);
+		appf_cloexec(STDERR_FILENO, 0, verb);
 		if (error > 0)
 			return -1;
 		return 0;
 	}
 
-	error = errno;
-	fprintf(stderr, "Error, failed to open null device: %s\n",
-		strerror(error));
-	fflush(stderr);
+	if (verb != 0) {
+		error = errno;
+		fprintf(stderr, "Error, failed to open null device: %s\n",
+			strerror(error));
+		fflush(stderr);
+		errno = error;
+	}
 	return -1;
 }
 
@@ -418,11 +534,11 @@ int apputil_call(apputil_t app_, const void * indata, unsigned int inlen)
 	if (write0) {
 		ssize_t rl1;
 
-		ret = appu_pipesize(infd[1], (int) (inlen + 1));
+		ret = appf_pipesize(infd[1], (int) (inlen + 1), 1);
 		if (ret < 0)
 			goto err0;
 
-		appu_fdblock(infd[1], 0);
+		appf_fdblock(infd[1], 0, 1);
 		rl1 = write(infd[1], indata, (size_t) inlen);
 		if (rl1 != (ssize_t) inlen) {
 			error = errno;
@@ -448,7 +564,7 @@ int apputil_call(apputil_t app_, const void * indata, unsigned int inlen)
 		psize = opts & APPUTIL_PIPE_MASK;
 		if (psize == 0)
 			psize = APPUTIL_BUFSIZE;
-		appu_pipesize(outfd[1], psize);
+		appf_pipesize(outfd[1], psize, 1);
 	}
 
 	pid = fork();
@@ -464,7 +580,7 @@ int apputil_call(apputil_t app_, const void * indata, unsigned int inlen)
 		APPUTIL_CLOSE(outfd[0]);
 
 		if ((opts & APPUTIL_OPTION_NULLIO) &&
-			appu_zipstdio() < 0) {
+			appf_zipstdio(NULL, 1) < 0) {
 			_exit(90);
 		}
 
@@ -480,8 +596,8 @@ int apputil_call(apputil_t app_, const void * indata, unsigned int inlen)
 				}
 				APPUTIL_CLOSE(infd[0]);
 			}
-			appu_cloexec(STDIN_FILENO, 0, 1);
-			appu_fdblock(STDIN_FILENO, write0 == 0);
+			appf_cloexec(STDIN_FILENO, 0, 1);
+			appf_fdblock(STDIN_FILENO, write0 == 0, 1);
 		}
 
 		if (opts & (APPUTIL_OPTION_OUTPUT | APPUTIL_OPTION_OUTALL)) {
@@ -496,7 +612,7 @@ int apputil_call(apputil_t app_, const void * indata, unsigned int inlen)
 				}
 				APPUTIL_CLOSE(outfd[1]);
 			}
-			appu_cloexec(STDOUT_FILENO, 0, 1);
+			appf_cloexec(STDOUT_FILENO, 0, 1);
 		}
 
 		if (opts & APPUTIL_OPTION_OUTALL) {
@@ -508,15 +624,36 @@ int apputil_call(apputil_t app_, const void * indata, unsigned int inlen)
 				fflush(stderr);
 				_exit(93);
 			}
-			appu_cloexec(STDERR_FILENO, 0, 1);
+			appf_cloexec(STDERR_FILENO, 0, 1);
 		}
 
-		if (opts & APPUTIL_OPTION_CLOSEFDS) {
+		if (opts & APPUTIL_OPTION_CLOSER) {
 			int startfd = STDERR_FILENO + 1;
 			long maxfd = sysconf(_SC_OPEN_MAX);
 			if (maxfd <= startfd)
 				maxfd = 1024;
-			appu_closefds(startfd, maxfd, CLOSE_RANGE_CLOEXEC);
+			appf_closefds(startfd, maxfd, 1);
+		}
+
+		if (opts & APPUTIL_OPTION_LOWPRI) {
+			struct sched_param spa;
+			ret = nice(19);
+			if (ret == -1) {
+				error = errno;
+				fprintf(stderr, "Error, nice(19) has failed: %s\n",
+					strerror(error));
+				fflush(stderr);
+			}
+			spa.sched_priority = 0;
+			ret = sched_setscheduler(0, SCHED_IDLE, &spa);
+			if (ret == -1) {
+				error = errno;
+				if (error != ENOSYS) {
+					fprintf(stderr, "Error, failed to set idle scheduler: %s\n",
+						strerror(error));
+					fflush(stderr);
+				}
+			}
 		}
 
 		newapp = app->appargs[0];
@@ -546,8 +683,8 @@ int apputil_call(apputil_t app_, const void * indata, unsigned int inlen)
 	return apputil_wait(app_, 0, NULL);
 
 err0:
-	close_pipe_fds(infd);
-	close_pipe_fds(outfd);
+	close_fd2(infd);
+	close_fd2(outfd);
 	return -1;
 }
 
@@ -694,6 +831,8 @@ int apputil_free(apputil_t app_)
 	dftargs = (char * *) app->dftargs;
 	if (app->appargs != dftargs)
 		free(app->appargs);
+	app->numargs = 0;
+	app->maxargs = 0;
 	app->appargs = NULL;
 	free(app);
 	return 0;
