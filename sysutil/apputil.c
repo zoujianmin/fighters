@@ -166,8 +166,12 @@ int appf_mountpoint(const char * path)
 }
 
 #ifndef SYS_close_range
-#define SYS_close_range -1l
-#warning Define SYS_close_range to minus one
+  #ifdef __NR_close_range
+    #define SYS_close_range __NR_close_range
+  #else
+    #define SYS_close_range -1l
+    #warning Define SYS_close_range to minus one
+  #endif
 #endif
 int appf_closefds(int fd, int maxfd, int verb)
 {
