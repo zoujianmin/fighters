@@ -31,6 +31,10 @@
 #include <netdb.h>
 #include <pthread.h>
 #include <sys/prctl.h>
+#ifndef __GLIBC__
+  /* for syscall(...), gettid */
+  #include <sys/syscall.h>
+#endif
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -808,22 +812,20 @@ again:
 	return 1;
 }
 
-static int sysutil_kill(lua_State * L)
+static int sysutil_kill_common(lua_State * L, int istid)
 {
-	pid_t pid;
-	int ntop, signo;
+	lua_Integer pid;
 	lua_Integer luai;
+	int ntop, signo, error;
 
 	pid = 0;
+	error = 0;
 	signo = 0;
 	if (sysutil_checkstack(L, 2) < 0)
 		return 0;
 
-	luai = 0;
 	ntop = lua_gettop(L);
-	if (ntop >= 1 && sysutil_isinteger(L, 1, &luai))
-		pid = (pid_t) luai;
-	else {
+	if (ntop < 1 || sysutil_isinteger(L, 1, &pid) == 0) {
 		lua_pushnil(L);
 		lua_pushstring(L, "PID not given for killing");
 		return 2;
@@ -832,15 +834,25 @@ static int sysutil_kill(lua_State * L)
 	luai = 0;
 	if (ntop >= 2 && sysutil_isinteger(L, 2, &luai))
 		signo = (int) luai;
-	if (kill(pid, signo) == -1) {
-		int error = errno;
+	if (istid != 0)
+		error = pthread_kill((pthread_t) pid, signo);
+	else if (kill((pid_t) pid, signo) == -1)
+		error = errno;
+
+	if (error != 0) {
 		lua_pushnil(L);
-		lua_pushfstring(L, "kill(%d, %d) has failed: %s",
+		lua_pushfstring(L, "%skill(%d, %d) has failed: %s",
+			istid ? "pthread_" : "",
 			(int) pid, signo, strerror(error));
 		return 2;
 	}
 	lua_pushboolean(L, 1);
 	return 1;
+}
+
+static int sysutil_kill(lua_State * L)
+{
+	return sysutil_kill_common(L, 0);
 }
 
 static int sysutil_sha256(lua_State * L)
@@ -944,10 +956,53 @@ static int sysutil_zipstdio(lua_State * L)
 	return 1;
 }
 
+static int sysutil_getpid(lua_State * L)
+{
+	pid_t pid;
+	if (sysutil_checkstack(L, 1) < 0)
+		return 0;
+	pid = getpid();
+	lua_pushinteger(L, (lua_Integer) pid);
+	return 1;
+}
+
+static int sysutil_gettid(lua_State * L)
+{
+	long pid;
+	if (sysutil_checkstack(L, 1) < 0)
+		return 0;
+#ifdef __GLIBC__
+	pid = (long) gettid();
+#else
+	pid = syscall(SYS_gettid, 0);
+#endif
+	lua_pushinteger(L, (lua_Integer) pid);
+	return 1;
+}
+
+static int sysutil_getid(lua_State * L)
+{
+	pthread_t tid;
+	if (sysutil_checkstack(L, 1) < 0)
+		return 0;
+	tid = pthread_self();
+	lua_pushinteger(L, (lua_Integer) tid);
+	return 1;
+}
+
+static int sysutil_killid(lua_State * L)
+{
+	return sysutil_kill_common(L, -1);
+}
+
 static const luaL_Reg sysutil_regs[] = {
 	{ "call",           sysutil_call },
 	{ "delay",          sysutil_delay },
+	{ "getid",          sysutil_getid },       /* calls pthread_self() */
+	{ "getpid",         sysutil_getpid },
+	{ "gettid",         sysutil_gettid },
 	{ "kill",           sysutil_kill },
+	{ "killid",         sysutil_killid },      /* calls pthread_kill(...) */
 	{ "mdelay",         sysutil_mdelay },
 	{ "mountpoint",     sysutil_mountpoint },
 	{ "read",           sysutil_read },
