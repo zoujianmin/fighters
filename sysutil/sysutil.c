@@ -966,6 +966,16 @@ static int sysutil_getpid(lua_State * L)
 	return 1;
 }
 
+static int sysutil_getppid(lua_State * L)
+{
+	pid_t pid;
+	if (sysutil_checkstack(L, 1) < 0)
+		return 0;
+	pid = getppid();
+	lua_pushinteger(L, (lua_Integer) pid);
+	return 1;
+}
+
 static int sysutil_gettid(lua_State * L)
 {
 	long pid;
@@ -1000,6 +1010,7 @@ static const luaL_Reg sysutil_regs[] = {
 	{ "delay",          sysutil_delay },
 	{ "getid",          sysutil_getid },       /* calls pthread_self() */
 	{ "getpid",         sysutil_getpid },
+	{ "getppid",        sysutil_getppid },
 	{ "gettid",         sysutil_gettid },
 	{ "kill",           sysutil_kill },
 	{ "killid",         sysutil_killid },      /* calls pthread_kill(...) */
