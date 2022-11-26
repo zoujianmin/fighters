@@ -734,7 +734,7 @@ char * apputil_read(apputil_t app_,
 	}
 
 	pbuf[rl1] = '\0';
-	*realen = (int) rl1;
+	*realen = (unsigned int) rl1;
 	if (rl1 == 0) {
 		free(pbuf);
 		return NULL;

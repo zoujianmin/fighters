@@ -344,7 +344,7 @@ static int sysutil_call(lua_State * L)
 
 	ret = 1;
 	lua_pushinteger(L, apputil_exitval(appu));
-	if (options & APPUTIL_OPTION_OUTPUT) {
+	if (options & (APPUTIL_OPTION_OUTPUT | APPUTIL_OPTION_OUTALL)) {
 		char * output;
 		unsigned int len, outlen;
 
@@ -725,13 +725,8 @@ static int sysutil_read(lua_State * L)
 		flen = maxlen;
 
 	/* should not read zero length of data */
-	if (flen == 0) {
-		if (isfile)
-			close(fd);
-		lua_pushnil(L);
-		lua_pushstring(L, "zero length of file to read");
-		return 2;
-	}
+	if (flen == 0)
+		flen = APPUTIL_BUFSIZE;
 
 	fild = (unsigned char *) malloc(flen);
 	if (fild == NULL) {
@@ -792,7 +787,7 @@ again:
 	pid1 = waitpid(pid, &est, nohang);
 	if (pid1 < 0) {
 		int error = errno;
-		if (error == EINTR && !nohang)
+		if (error == EINTR && nohang == 0)
 			goto again;
 		lua_pushnil(L);
 		lua_pushfstring(L, "failed to waitpid '%d': %s",
@@ -908,6 +903,8 @@ static int sysutil_sha256(lua_State * L)
 			rl1 = read(fd, bufp, rsize);
 			if (rl1 < 0) {
 				error = errno;
+				if (error == EINTR)
+					continue;
 				fprintf(stderr, "Error, failed to read %s: %s\n",
 					filp, strerror(error));
 				fflush(stderr);
