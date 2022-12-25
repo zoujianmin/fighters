@@ -580,6 +580,7 @@ int apputil_call(apputil_t app_, const void * indata, unsigned int inlen)
 	}
 
 	if (pid == 0) {
+		char * const * args;
 		APPUTIL_CLOSE(infd[1]);
 		APPUTIL_CLOSE(outfd[0]);
 
@@ -661,10 +662,14 @@ int apputil_call(apputil_t app_, const void * indata, unsigned int inlen)
 		}
 
 		newapp = app->appargs[0];
+		args = app->appargs;
+		if (args[1] != NULL &&
+			(opts & APPUTIL_OPTION_SYMLINK) != 0)
+			args = &(app->appargs[1]);
 		if (newapp[0] == '/') {
-			execv(newapp, app->appargs);
+			execv(newapp, args);
 		} else {
-			execvp(newapp, app->appargs);
+			execvp(newapp, args);
 		}
 		error = errno;
 		fprintf(stderr, "Error, failed to run application '%s': %s\n",

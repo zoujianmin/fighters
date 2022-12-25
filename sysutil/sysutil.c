@@ -1002,6 +1002,163 @@ static int sysutil_killid(lua_State * L)
 	return sysutil_kill_common(L, -1);
 }
 
+static int sysutil_readlink(lua_State * L)
+{
+	int ntop;
+	ssize_t rl1;
+	char * output;
+	const char * linkp;
+
+	linkp = NULL;
+	output = NULL;
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	ntop = lua_gettop(L);
+	if (ntop >= 1 && lua_type(L, 1) == LUA_TSTRING)
+		linkp = lua_tolstring(L, 1, NULL);
+
+	if (linkp == NULL || linkp[0] == '\0') {
+		lua_pushnil(L);
+		lua_pushstring(L, "invalid argument to readlink");
+		return 2;
+	}
+
+	output = (char *) malloc(APPUTIL_BUFSIZE);
+	if (output == NULL) {
+		lua_pushnil(L);
+		lua_pushstring(L, "system out of memory for readlink");
+		return 2;
+	}
+
+	rl1 = readlink(linkp, output, APPUTIL_BUFSIZE);
+	if (rl1 < 0) {
+		int error;
+		error = errno;
+		free(output);
+		lua_pushnil(L);
+		lua_pushfstring(L, "readlink(%s) has failed: %s",
+			linkp, strerror(error));
+		errno = error;
+		return 2;
+	}
+
+	if (rl1 > APPUTIL_BUFSIZE)
+		rl1 = APPUTIL_BUFSIZE;
+	lua_pushlstring(L, output, (size_t) rl1);
+	free(output);
+	return 1;
+}
+
+static int sysutil_unlink(lua_State * L)
+{
+	int ret, ntop;
+	const char * filp;
+
+	filp = NULL;
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	ntop = lua_gettop(L);
+	if (ntop >= 1 && lua_type(L, 1) == LUA_TSTRING)
+		filp = lua_tolstring(L, 1, NULL);
+
+	if (filp == NULL || filp[0] == '\0') {
+		lua_pushnil(L);
+		lua_pushstring(L, "invalid argument to unlink");
+		return 2;
+	}
+
+	ret = unlink(filp);
+	if (ret < 0) {
+		int error;
+		error = errno;
+		lua_pushnil(L);
+		lua_pushfstring(L, "unlink(%s) has failed: %s",
+			filp, strerror(error));
+		errno = error;
+		return 2;
+	}
+
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+static int sysutil_rmdir(lua_State * L)
+{
+	int ret, ntop;
+	const char * dirp;
+
+	dirp = NULL;
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	ntop = lua_gettop(L);
+	if (ntop >= 1 && lua_type(L, 1) == LUA_TSTRING)
+		dirp = lua_tolstring(L, 1, NULL);
+
+	if (dirp == NULL || dirp[0] == '\0') {
+		lua_pushnil(L);
+		lua_pushstring(L, "invalid argument to unlink");
+		return 2;
+	}
+
+	ret = rmdir(dirp);
+	if (ret < 0) {
+		int error;
+		error = errno;
+		lua_pushnil(L);
+		lua_pushfstring(L, "rmdir(%s) has failed: %s",
+			dirp, strerror(error));
+		errno = error;
+		return 2;
+	}
+
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+static int sysutil_mkdir(lua_State * L)
+{
+	mode_t dirm;
+	int ret, ntop;
+	lua_Integer mode;
+	const char * dirp;
+
+	dirp = NULL;
+	dirm = 0755;
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	ntop = lua_gettop(L);
+	if (ntop >= 1 && lua_type(L, 1) == LUA_TSTRING)
+		dirp = lua_tolstring(L, 1, NULL);
+
+	if (dirp == NULL || dirp[0] == '\0') {
+		lua_pushnil(L);
+		lua_pushstring(L, "invalid argument to unlink");
+		return 2;
+	}
+
+	mode = 0;
+	if (ntop >= 2 && sysutil_isinteger(L, 2, &mode))
+		dirm = (mode_t) mode;
+
+	ret = mkdir(dirp, dirm);
+	if (ret < 0) {
+		int error;
+		error = errno;
+		lua_pushnil(L);
+		lua_pushfstring(L, "mkdir(%s) has failed: %s",
+			dirp, strerror(error));
+		errno = error;
+		return 2;
+	}
+
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
 static const luaL_Reg sysutil_regs[] = {
 	{ "call",           sysutil_call },
 	{ "delay",          sysutil_delay },
@@ -1012,11 +1169,15 @@ static const luaL_Reg sysutil_regs[] = {
 	{ "kill",           sysutil_kill },
 	{ "killid",         sysutil_killid },      /* calls pthread_kill(...) */
 	{ "mdelay",         sysutil_mdelay },
+	{ "mkdir",          sysutil_mkdir },
 	{ "mountpoint",     sysutil_mountpoint },
 	{ "read",           sysutil_read },
+	{ "readlink",       sysutil_readlink },
+	{ "rmdir",          sysutil_rmdir },
 	{ "setname",        sysutil_setname },
 	{ "sha256",         sysutil_sha256 },
 	{ "tcpcheck",       sysutil_tcpcheck },
+	{ "unlink",         sysutil_unlink },
 	{ "uptime",         sysutil_uptime },
 	{ "waitpid",        sysutil_waitpid },
 	{ "zipstdio",       sysutil_zipstdio },
@@ -1047,5 +1208,8 @@ int luaopen_sysutil(lua_State * L)
 
 	lua_pushinteger(L, APPUTIL_OPTION_LOWPRI);
 	lua_setfield(L, -2, "OPT_LOWPRI");
+
+	lua_pushinteger(L, APPUTIL_OPTION_SYMLINK);
+	lua_setfield(L, -2, "OPT_SYMLINK");
 	return 1;
 }
