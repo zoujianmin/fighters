@@ -65,12 +65,14 @@ const char * zsha256_hex(
 	plen = (size_t) buflen;
 	blen = sizeof(uint32_t) * 0x8;
 	pdat = (const uint8_t *) hash->hashval;
-	for (idx = 0; idx < blen; idx += 0x4) {
-		snprintf(pbuf + clen, plen - clen, "%02x%02x%02x%02x",
+	for (idx = 0; idx < blen; idx += 0x8) {
+		snprintf(pbuf + clen, plen - clen, "%02x%02x%02x%02x%02x%02x%02x%02x",
 			(uint32_t) pdat[0], (uint32_t) pdat[1],
-			(uint32_t) pdat[2], (uint32_t) pdat[3]);
-		pdat += 0x4;
-		clen += 0x8;
+			(uint32_t) pdat[2], (uint32_t) pdat[3],
+			(uint32_t) pdat[4], (uint32_t) pdat[5],
+			(uint32_t) pdat[6], (uint32_t) pdat[7]);
+		pdat += 0x8;
+		clen += 0x10;
 	}
 	return pbuf;
 }

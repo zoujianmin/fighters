@@ -41,6 +41,8 @@
 #include "apputil.h"
 #include "zsha256_util.h"
 
+#include <glob.h> /* request for glob function */
+
 extern int luaopen_sysutil(lua_State * L);
 
 static int sysutil_checkstack(lua_State * lua, int num)
@@ -807,15 +809,21 @@ again:
 	return 1;
 }
 
+#define SYSUTIL_KILL       0
+#define SYSUTIL_KILLID     1
+#define SYSUTIL_KILLPG     2
+
 static int sysutil_kill_common(lua_State * L, int istid)
 {
 	lua_Integer pid;
 	lua_Integer luai;
+	const char * fname;
 	int ntop, signo, error;
 
 	pid = 0;
 	error = 0;
 	signo = 0;
+	fname = "unknown";
 	if (sysutil_checkstack(L, 2) < 0)
 		return 0;
 
@@ -829,16 +837,32 @@ static int sysutil_kill_common(lua_State * L, int istid)
 	luai = 0;
 	if (ntop >= 2 && sysutil_isinteger(L, 2, &luai))
 		signo = (int) luai;
-	if (istid != 0)
+	switch (istid) {
+	case SYSUTIL_KILL:
+		fname = "kill";
+		if (kill((pid_t) pid, signo) == -1)
+			error = errno;
+		break;
+
+	case SYSUTIL_KILLID:
+		fname = "pthread_kill";
 		error = pthread_kill((pthread_t) pid, signo);
-	else if (kill((pid_t) pid, signo) == -1)
-		error = errno;
+		break;
+
+	case SYSUTIL_KILLPG:
+		fname = "killpg";
+		if (killpg((pid_t) pid, signo) == -1)
+			error = errno;
+		break;
+
+	default:
+		break;
+	}
 
 	if (error != 0) {
 		lua_pushnil(L);
-		lua_pushfstring(L, "%skill(%d, %d) has failed: %s",
-			istid ? "pthread_" : "",
-			(int) pid, signo, strerror(error));
+		lua_pushfstring(L, "%s(%d, %d) has failed: %s",
+			fname, (int) pid, signo, strerror(error));
 		return 2;
 	}
 	lua_pushboolean(L, 1);
@@ -847,7 +871,7 @@ static int sysutil_kill_common(lua_State * L, int istid)
 
 static int sysutil_kill(lua_State * L)
 {
-	return sysutil_kill_common(L, 0);
+	return sysutil_kill_common(L, SYSUTIL_KILL);
 }
 
 static int sysutil_sha256(lua_State * L)
@@ -947,8 +971,11 @@ static int sysutil_zipstdio(lua_State * L)
 
 	pdev = NULL;
 	ntop = lua_gettop(L);
-	if (ntop >= 1 && lua_type(L, 1) == LUA_TSTRING)
+	if (ntop >= 1 && lua_type(L, 1) == LUA_TSTRING) {
 		pdev = lua_tolstring(L, 1, NULL);
+		if (pdev && pdev[0] == '\0')
+			pdev = NULL;
+	}
 	lua_pushboolean(L, appf_zipstdio(pdev, 0) == 0);
 	return 1;
 }
@@ -999,7 +1026,12 @@ static int sysutil_getid(lua_State * L)
 
 static int sysutil_killid(lua_State * L)
 {
-	return sysutil_kill_common(L, -1);
+	return sysutil_kill_common(L, SYSUTIL_KILLID);
+}
+
+static int sysutil_killpg(lua_State * L)
+{
+	return sysutil_kill_common(L, SYSUTIL_KILLPG);
 }
 
 static int sysutil_readlink(lua_State * L)
@@ -1052,70 +1084,64 @@ static int sysutil_readlink(lua_State * L)
 
 static int sysutil_unlink(lua_State * L)
 {
-	int ret, ntop;
-	const char * filp;
+	int idx, jdx;
+	int ntop, error;
 
-	filp = NULL;
+	jdx = 0;
+	error = 0;
 	if (sysutil_checkstack(L, 2) < 0)
 		return 0;
 
 	ntop = lua_gettop(L);
-	if (ntop >= 1 && lua_type(L, 1) == LUA_TSTRING)
-		filp = lua_tolstring(L, 1, NULL);
+	for (idx = 1; idx <= ntop; ++idx) {
+		const char * filp;
+		if (lua_type(L, idx) != LUA_TSTRING)
+			continue;
 
-	if (filp == NULL || filp[0] == '\0') {
-		lua_pushnil(L);
-		lua_pushstring(L, "invalid argument to unlink");
-		return 2;
+		filp = lua_tolstring(L, idx, NULL);
+		if (filp == NULL || filp[0] == '\0')
+			continue;
+
+		if (unlink(filp) == -1)
+			error++;
+		else
+			jdx++;
 	}
 
-	ret = unlink(filp);
-	if (ret < 0) {
-		int error;
-		error = errno;
-		lua_pushnil(L);
-		lua_pushfstring(L, "unlink(%s) has failed: %s",
-			filp, strerror(error));
-		errno = error;
-		return 2;
-	}
-
-	lua_pushboolean(L, 1);
-	return 1;
+	lua_pushinteger(L, jdx);
+	lua_pushinteger(L, error);
+	return 2;
 }
 
 static int sysutil_rmdir(lua_State * L)
 {
-	int ret, ntop;
-	const char * dirp;
+	int idx, jdx;
+	int error, ntop;
 
-	dirp = NULL;
+	jdx = 0;
+	error = 0;
 	if (sysutil_checkstack(L, 2) < 0)
 		return 0;
 
 	ntop = lua_gettop(L);
-	if (ntop >= 1 && lua_type(L, 1) == LUA_TSTRING)
+	for (idx = 1; idx <= ntop; ++idx) {
+		const char * dirp;
+		if (lua_type(L, idx) != LUA_TSTRING)
+			continue;
+
 		dirp = lua_tolstring(L, 1, NULL);
+		if (dirp == NULL || dirp[0] == '\0')
+			continue;
 
-	if (dirp == NULL || dirp[0] == '\0') {
-		lua_pushnil(L);
-		lua_pushstring(L, "invalid argument to unlink");
-		return 2;
+		if (rmdir(dirp) == -1)
+			error++;
+		else
+			jdx++;
 	}
 
-	ret = rmdir(dirp);
-	if (ret < 0) {
-		int error;
-		error = errno;
-		lua_pushnil(L);
-		lua_pushfstring(L, "rmdir(%s) has failed: %s",
-			dirp, strerror(error));
-		errno = error;
-		return 2;
-	}
-
-	lua_pushboolean(L, 1);
-	return 1;
+	lua_pushinteger(L, idx);
+	lua_pushinteger(L, error);
+	return 2;
 }
 
 static int sysutil_mkdir(lua_State * L)
@@ -1136,7 +1162,7 @@ static int sysutil_mkdir(lua_State * L)
 
 	if (dirp == NULL || dirp[0] == '\0') {
 		lua_pushnil(L);
-		lua_pushstring(L, "invalid argument to unlink");
+		lua_pushstring(L, "invalid argument to mkdir");
 		return 2;
 	}
 
@@ -1159,23 +1185,388 @@ static int sysutil_mkdir(lua_State * L)
 	return 1;
 }
 
+static int sysutil_stat(lua_State * L)
+{
+	struct stat fst;
+	const char * filp;
+	int error, ntop, issym;
+
+	issym = 0;
+	filp = NULL;
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	ntop = lua_gettop(L);
+	if (ntop >= 1 && lua_type(L, 1) == LUA_TSTRING)
+		filp = lua_tolstring(L, 1, NULL);
+	if (filp == NULL || filp[0] == '\0') {
+		lua_pushnil(L);
+		lua_pushstring(L, "invalid argument for stat");
+		return 2;
+	}
+
+	if (ntop >= 2 && lua_type(L, 2) == LUA_TBOOLEAN)
+		issym = lua_toboolean(L, 2);
+
+	memset(&fst, 0, sizeof(fst));
+	error = issym ? lstat(filp, &fst) : stat(filp, &fst);
+	if (error == -1) {
+		error = errno;
+		lua_pushnil(L);
+		lua_pushfstring(L, "stat(%s) has failed: %s",
+			filp, strerror(error));
+		errno = error;
+		return 2;
+	}
+
+	lua_createtable(L, 0, 20);
+
+	lua_pushinteger(L, (lua_Integer) fst.st_dev);
+	lua_setfield(L, -2, "st_dev");
+
+	lua_pushinteger(L, (lua_Integer) fst.st_ino);
+	lua_setfield(L, -2, "st_ino");
+
+	lua_pushinteger(L, (lua_Integer) fst.st_mode);
+	lua_setfield(L, -2, "st_mode");
+
+	lua_pushinteger(L, (lua_Integer) fst.st_nlink);
+	lua_setfield(L, -2, "st_nlink");
+
+	lua_pushinteger(L, (lua_Integer) fst.st_uid);
+	lua_setfield(L, -2, "st_uid");
+
+	lua_pushinteger(L, (lua_Integer) fst.st_gid);
+	lua_setfield(L, -2, "st_gid");
+
+	lua_pushinteger(L, (lua_Integer) fst.st_rdev);
+	lua_setfield(L, -2, "st_rdev");
+
+	lua_pushinteger(L, (lua_Integer) fst.st_size);
+	lua_setfield(L, -2, "st_size");
+
+	lua_pushinteger(L, (lua_Integer) fst.st_blksize);
+	lua_setfield(L, -2, "st_blksize");
+
+	lua_pushinteger(L, (lua_Integer) fst.st_blocks);
+	lua_setfield(L, -2, "st_blocks");
+
+	lua_pushinteger(L, (lua_Integer) fst.st_atime);
+	lua_setfield(L, -2, "st_atime");
+
+	lua_pushinteger(L, (lua_Integer) fst.st_mtime);
+	lua_setfield(L, -2, "st_mtime");
+
+	lua_pushinteger(L, (lua_Integer) fst.st_ctime);
+	lua_setfield(L, -2, "st_ctime");
+
+	lua_pushboolean(L, S_ISREG(fst.st_mode) != 0);
+	lua_setfield(L, -2, "isreg");
+
+	lua_pushboolean(L, S_ISDIR(fst.st_mode) != 0);
+	lua_setfield(L, -2, "isdir");
+
+	lua_pushboolean(L, S_ISLNK(fst.st_mode) != 0);
+	lua_setfield(L, -2, "issym");
+
+	lua_pushboolean(L, S_ISCHR(fst.st_mode) != 0);
+	lua_setfield(L, -2, "ischr");
+
+	lua_pushboolean(L, S_ISBLK(fst.st_mode) != 0);
+	lua_setfield(L, -2, "isblk");
+
+	lua_pushboolean(L, S_ISFIFO(fst.st_mode) != 0);
+	lua_setfield(L, -2, "isfifo");
+
+	lua_pushboolean(L, S_ISSOCK(fst.st_mode) != 0);
+	lua_setfield(L, -2, "issock");
+	return 1;
+}
+
+static int sysutil_glob(lua_State * L)
+{
+	glob_t gt;
+	lua_Integer luai;
+	int flags, ntop, ret;
+	const char * pattern;
+
+	luai = 0;
+	flags = 0;
+	pattern = NULL;
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	ntop = lua_gettop(L);
+	if (ntop >= 1 && sysutil_isinteger(L, 1, &luai))
+		flags = (int) luai;
+	if (ntop >= 2 && lua_type(L, 2) == LUA_TSTRING)
+		pattern = lua_tolstring(L, 2, NULL);
+	if (pattern == NULL || pattern[0] == '\0') {
+		lua_pushnil(L);
+		lua_pushstring(L, "Error, invalid pattern for glob");
+		return 2;
+	}
+
+	memset(&gt, 0, sizeof(gt));
+	ret = glob(pattern, flags, NULL, &gt);
+	lua_pushinteger(L, ret);
+	if (gt.gl_pathc > 0 && gt.gl_pathv != NULL) {
+		size_t idx;
+		int jdx = 0;
+
+		ntop = lua_gettop(L);
+		lua_createtable(L, (int) (gt.gl_pathc + 1), 0);
+		for (idx = 0; idx < gt.gl_pathc; ++idx) {
+			const char * pathv = gt.gl_pathv[idx];
+			if (pathv && pathv[0]) {
+				lua_pushinteger(L, ++jdx);
+				lua_pushstring(L, pathv);
+				lua_settable(L, -3);
+			}
+		}
+
+		globfree(&gt);
+		if (jdx == 0) {
+			lua_settop(L, ntop);
+			return 1;
+		}
+		return 2;
+	}
+
+	globfree(&gt);
+	return 1;
+}
+
+static int sysutil_chdir(lua_State * L)
+{
+	int ntop, error;
+	const char * newdir;
+
+	error = 0;
+	newdir = NULL;
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	ntop = lua_gettop(L);
+	if (ntop >= 1 && lua_type(L, 1) == LUA_TSTRING)
+		newdir = lua_tolstring(L, 1, NULL);
+
+	if (newdir && newdir[0]) {
+		error = chdir(newdir);
+		if (error == -1) {
+			error = errno;
+			lua_pushnil(L);
+			lua_pushfstring(L, "chdir(%s) has failed: %s",
+				newdir, strerror(error));
+			return 2;
+		}
+		lua_pushboolean(L, 1);
+		return 1;
+	} else {
+		char * curdir, * cdir;
+		curdir = (char *) calloc(0x1, APPUTIL_BUFSIZE);
+		if (curdir == NULL) {
+			lua_pushnil(L);
+			lua_pushstring(L, "System out of memory!");
+			return 2;
+		}
+
+		cdir = getcwd(curdir, APPUTIL_BUFSIZE - 1);
+		if (cdir == NULL) {
+			error = errno;
+			free(curdir);
+			lua_pushnil(L);
+			lua_pushfstring(L, "getcwd() has failed: %s",
+				strerror(error));
+			return 2;
+		}
+
+		lua_pushstring(L, cdir);
+		free(curdir);
+		return 1;
+	}
+}
+
+static int sysutil_sync(lua_State * L)
+{
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	sync();
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+static int sysutil_symlink(lua_State * L)
+{
+	int ntop, error;
+	const char * src;
+	const char * dst;
+
+	error = 0;
+	src = dst = NULL;
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	ntop = lua_gettop(L);
+	if (ntop < 2 ||
+		lua_type(L, 1) != LUA_TSTRING ||
+		lua_type(L, 2) != LUA_TSTRING) {
+err0:
+		lua_pushnil(L);
+		lua_pushstring(L, "invalid arguments for symlink");
+		return 2;
+	}
+
+	src = lua_tolstring(L, 1, NULL);
+	dst = lua_tolstring(L, 2, NULL);
+	if (src == NULL || src[0] == '\0' ||
+		dst == NULL || dst[0] == '\0')
+		goto err0;
+
+	if (ntop >= 3 &&
+		lua_type(L, 3) == LUA_TBOOLEAN &&
+		lua_toboolean(L, 3))
+		error = link(src, dst);
+	else
+		error = symlink(src, dst);
+	if (error == -1) {
+		error = errno;
+		lua_pushnil(L);
+		lua_pushfstring(L, "link/symlink(%s, %s) has failed: %s",
+			src, dst, strerror(error));
+		return 2;
+	}
+
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+static int sysutil_mkfifo(lua_State * L)
+{
+	mode_t fifom;
+	int ret, ntop;
+	lua_Integer mode;
+	const char * fifop;
+
+	fifop = NULL;
+	fifom = 0755;
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	ntop = lua_gettop(L);
+	if (ntop >= 1 && lua_type(L, 1) == LUA_TSTRING)
+		fifop = lua_tolstring(L, 1, NULL);
+
+	if (fifop == NULL || fifop[0] == '\0') {
+		lua_pushnil(L);
+		lua_pushstring(L, "invalid argument to mkfifo");
+		return 2;
+	}
+
+	mode = 0;
+	if (ntop >= 2 && sysutil_isinteger(L, 2, &mode))
+		fifom = (mode_t) mode;
+
+	ret = mkfifo(fifop, fifom);
+	if (ret < 0) {
+		int error;
+		error = errno;
+		lua_pushnil(L);
+		lua_pushfstring(L, "mkfifo(%s) has failed: %s",
+			fifop, strerror(error));
+		errno = error;
+		return 2;
+	}
+
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+static int sysutil_chmod(lua_State * L)
+{
+	mode_t mode;
+	int ntop, ret;
+	lua_Integer luai;
+
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	luai = 0;
+	ntop = lua_gettop(L);
+	if (ntop < 2 || sysutil_isinteger(L, 2, &luai) == 0) {
+		lua_pushnil(L);
+		lua_pushstring(L, "invalid mode given to chmod");
+		return 2;
+	}
+
+	mode = (mode_t) luai;
+	luai = 0;
+	if (sysutil_isinteger(L, 1, &luai)) {
+		int pfd = (int) luai;
+		ret = fchmod(pfd, mode);
+		if (ret == -1) {
+			int error;
+			error = errno;
+			lua_pushnil(L);
+			lua_pushfstring(L, "fchmod(%d) has failed: %s",
+				pfd, strerror(error));
+			errno = error;
+			return 2;
+		}
+	} else if (lua_type(L, 1) == LUA_TSTRING) {
+		const char * filp;
+		filp = lua_tolstring(L, 1, NULL);
+		if (filp == NULL || filp[0] == '\0') {
+			lua_pushnil(L);
+			lua_pushstring(L, "invalid file path given to chmod");
+			return 2;
+		}
+		ret = chmod(filp, mode);
+		if (ret == -1) {
+			int error;
+			error = errno;
+			lua_pushnil(L);
+			lua_pushfstring(L, "chmod(%s) has failed: %s",
+				filp, strerror(error));
+			errno = error;
+			return 2;
+		}
+	} else {
+		lua_pushnil(L);
+		lua_pushstring(L, "invalid argument given to chmod");
+		return 2;
+	}
+
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
 static const luaL_Reg sysutil_regs[] = {
 	{ "call",           sysutil_call },
+	{ "chdir",          sysutil_chdir },
+	{ "chmod",          sysutil_chmod },
 	{ "delay",          sysutil_delay },
 	{ "getid",          sysutil_getid },       /* calls pthread_self() */
 	{ "getpid",         sysutil_getpid },
 	{ "getppid",        sysutil_getppid },
 	{ "gettid",         sysutil_gettid },
+	{ "glob",           sysutil_glob },
 	{ "kill",           sysutil_kill },
 	{ "killid",         sysutil_killid },      /* calls pthread_kill(...) */
+	{ "killpg",         sysutil_killpg },
 	{ "mdelay",         sysutil_mdelay },
 	{ "mkdir",          sysutil_mkdir },
+	{ "mkfifo",         sysutil_mkfifo },
 	{ "mountpoint",     sysutil_mountpoint },
 	{ "read",           sysutil_read },
 	{ "readlink",       sysutil_readlink },
 	{ "rmdir",          sysutil_rmdir },
 	{ "setname",        sysutil_setname },
 	{ "sha256",         sysutil_sha256 },
+	{ "stat",           sysutil_stat },
+	{ "symlink",        sysutil_symlink },
+	{ "sync",           sysutil_sync },
 	{ "tcpcheck",       sysutil_tcpcheck },
 	{ "unlink",         sysutil_unlink },
 	{ "uptime",         sysutil_uptime },
@@ -1183,6 +1574,15 @@ static const luaL_Reg sysutil_regs[] = {
 	{ "zipstdio",       sysutil_zipstdio },
 	{ NULL,             NULL },
 };
+
+#define SYSUTIL_PUSHINT(VAL_INT_) \
+	do { \
+		lua_Integer luai; \
+		const char * valn = # VAL_INT_; \
+		luai = (lua_Integer) VAL_INT_; \
+		lua_pushinteger(L, luai); \
+		lua_setfield(L, -2, valn); \
+	} while (0)
 
 int luaopen_sysutil(lua_State * L)
 {
@@ -1211,5 +1611,22 @@ int luaopen_sysutil(lua_State * L)
 
 	lua_pushinteger(L, APPUTIL_OPTION_SYMLINK);
 	lua_setfield(L, -2, "OPT_SYMLINK");
+
+	/* flags for glob(...) function: */
+	SYSUTIL_PUSHINT(GLOB_ERR);
+	SYSUTIL_PUSHINT(GLOB_MARK);
+	SYSUTIL_PUSHINT(GLOB_NOSORT);
+	SYSUTIL_PUSHINT(GLOB_NOCHECK);
+	SYSUTIL_PUSHINT(GLOB_APPEND);
+	SYSUTIL_PUSHINT(GLOB_NOESCAPE);
+	SYSUTIL_PUSHINT(GLOB_PERIOD);
+#ifdef GLOB_BRACE
+	SYSUTIL_PUSHINT(GLOB_BRACE);
+#endif
+#ifdef GLOB_NOMAGIC
+	SYSUTIL_PUSHINT(GLOB_NOMAGIC);
+#endif
+	SYSUTIL_PUSHINT(GLOB_ONLYDIR);
+
 	return 1;
 }
