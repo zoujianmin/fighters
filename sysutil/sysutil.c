@@ -1139,7 +1139,7 @@ static int sysutil_rmdir(lua_State * L)
 			jdx++;
 	}
 
-	lua_pushinteger(L, idx);
+	lua_pushinteger(L, jdx);
 	lua_pushinteger(L, error);
 	return 2;
 }
