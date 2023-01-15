@@ -1601,10 +1601,123 @@ static int sysutil_upmsec(lua_State * L)
 	return 1;
 }
 
+static int sysutil_close(lua_State * L)
+{
+	int ntop, idx;
+	int number, error;
+
+	number = error = 0;
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	ntop = lua_gettop(L);
+	for (idx = 1; idx <= ntop; ++idx) {
+		int fd = -1;
+		if (lua_type(L, idx) == LUA_TNUMBER)
+			fd = lua_tointeger(L, idx);
+		if (fd >= 0) {
+			if (close(fd) == 0)
+				number++;
+			else
+				error++;
+		}
+	}
+
+	lua_pushinteger(L, number);
+	lua_pushinteger(L, error);
+	return 2;
+}
+
+static int sysutil_cloexec(lua_State * L)
+{
+	lua_Integer luai;
+	int ntop, fd, cloexec;
+
+	fd = -1;
+	cloexec = 1;
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	luai = 0;
+	ntop = lua_gettop(L);
+	if (ntop >= 1 && sysutil_isinteger(L, 1, &luai))
+		fd = (int) luai;
+	if (ntop >= 2 && lua_type(L, 2) == LUA_TBOOLEAN)
+		cloexec = lua_toboolean(L, 2);
+
+	ntop = fcntl(fd, F_GETFD, 0);
+	if (ntop == -1) {
+		ntop = errno;
+		lua_pushinteger(L, ntop);
+		return 1;
+	}
+
+	if (cloexec != 0)
+		cloexec = ntop | FD_CLOEXEC;
+	else
+		cloexec = ntop & ~FD_CLOEXEC;
+	if (ntop == cloexec) {
+		lua_pushinteger(L, 0);
+		return 1;
+	}
+
+	if (fcntl(fd, F_SETFD, cloexec) == -1) {
+		ntop = errno;
+		lua_pushinteger(L, ntop);
+		return 1;
+	}
+	lua_pushinteger(L, 0);
+	return 1;
+}
+
+static int sysutil_open(lua_State * L)
+{
+	mode_t film;
+	lua_Integer luai;
+	const char * filp;
+	int fd, ntop, flags;
+
+	fd = -1;
+	filp = NULL;
+	film = (mode_t) 0644;
+	flags = O_RDONLY | O_CLOEXEC;
+
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	luai = 0;
+	ntop = lua_gettop(L);
+	if (ntop >= 1 && lua_type(L, 1) == LUA_TSTRING)
+		filp = lua_tolstring(L, 1, NULL);
+	if (filp == NULL || filp[0] == '\0') {
+		lua_pushnil(L);
+		lua_pushstring(L, "Error, invalid argument for method open");
+		return 2;
+	}
+
+	if (ntop >= 2 && sysutil_isinteger(L, 2, &luai))
+		flags = (int) luai;
+	if (ntop >= 3 && sysutil_isinteger(L, 3, &luai))
+		film = (mode_t) luai;
+
+	fd = open(filp, flags, film);
+	if (fd == -1) {
+		fd = errno;
+		lua_pushnil(L);
+		lua_pushinteger(L, fd);
+		return 2;
+	}
+
+	lua_pushinteger(L, fd);
+	return 1;
+}
+
 static const luaL_Reg sysutil_regs[] = {
 	{ "call",           sysutil_call },
 	{ "chdir",          sysutil_chdir },
 	{ "chmod",          sysutil_chmod },
+	{ "cloexec",        sysutil_cloexec },
+	{ "close",          sysutil_close },
 	{ "delay",          sysutil_delay },
 	{ "getid",          sysutil_getid },       /* calls pthread_self() */
 	{ "getpid",         sysutil_getpid },
@@ -1618,6 +1731,7 @@ static const luaL_Reg sysutil_regs[] = {
 	{ "mkdir",          sysutil_mkdir },
 	{ "mkfifo",         sysutil_mkfifo },
 	{ "mountpoint",     sysutil_mountpoint },
+	{ "open",           sysutil_open },
 	{ "read",           sysutil_read },
 	{ "readlink",       sysutil_readlink },
 	{ "rmdir",          sysutil_rmdir },
@@ -1687,6 +1801,22 @@ int luaopen_sysutil(lua_State * L)
 	SYSUTIL_PUSHINT(GLOB_NOMAGIC);
 #endif
 	SYSUTIL_PUSHINT(GLOB_ONLYDIR);
+
+	/* flags for open function: */
+	SYSUTIL_PUSHINT(O_RDONLY);
+	SYSUTIL_PUSHINT(O_WRONLY);
+	SYSUTIL_PUSHINT(O_RDWR);
+	SYSUTIL_PUSHINT(O_APPEND);
+	SYSUTIL_PUSHINT(O_CLOEXEC);
+	SYSUTIL_PUSHINT(O_CREAT);
+	SYSUTIL_PUSHINT(O_EXCL);
+	SYSUTIL_PUSHINT(O_LARGEFILE);
+	SYSUTIL_PUSHINT(O_NOATIME);
+	SYSUTIL_PUSHINT(O_NOCTTY);
+	SYSUTIL_PUSHINT(O_NOFOLLOW);
+	SYSUTIL_PUSHINT(O_NONBLOCK);
+	SYSUTIL_PUSHINT(O_TMPFILE);
+	SYSUTIL_PUSHINT(O_TRUNC);
 
 	return 1;
 }
