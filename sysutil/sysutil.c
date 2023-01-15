@@ -1398,10 +1398,26 @@ static int sysutil_chdir(lua_State * L)
 
 static int sysutil_sync(lua_State * L)
 {
+	int fd;
+	lua_Integer luai;
+
 	if (sysutil_checkstack(L, 2) < 0)
 		return 0;
 
-	sync();
+	luai = -1;
+	fd = lua_gettop(L);
+	if (fd >= 1 && sysutil_isinteger(L, 1, &luai)) {
+		fd = (int) luai;
+		fd = syncfs(fd);
+		if (fd == -1) {
+			fd = errno;
+			lua_pushboolean(L, 0);
+			lua_pushinteger(L, fd);
+			return 2;
+		}
+	} else {
+		sync();
+	}
 	lua_pushboolean(L, 1);
 	return 1;
 }
