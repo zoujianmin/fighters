@@ -94,11 +94,11 @@ static int sysutil_uptime(lua_State * L)
 	if (ret == -1) {
 		int error;
 		error = errno;
-		uptim.tv_sec = time(NULL);
-		uptim.tv_nsec = 0;
 		fprintf(stderr, "Error, failed to get system uptime: %s\n",
 			strerror(error));
 		fflush(stderr);
+		errno = error;
+		return 0;
 	}
 
 	lua_pushinteger(L, (lua_Integer) uptim.tv_sec);
@@ -108,16 +108,17 @@ static int sysutil_uptime(lua_State * L)
 
 static int sysutil_common_delay(lua_State * L, int issec)
 {
-	long delaysec;
 	int ret, error;
 	int argc, nexti;
 	lua_Integer luai;
+	long long delaysec;
 	struct timespec delay;
 	pthread_mutex_t * lockp;
 
 	error = 0;
 	nexti = 2;
 	lockp = NULL;
+	delaysec = -1;
 	ret = sysutil_checkstack(L, 2);
 	if (ret < 0)
 		return 0;
@@ -132,13 +133,21 @@ static int sysutil_common_delay(lua_State * L, int issec)
 	luai = 0;
 	ret = sysutil_isinteger(L, 1, &luai);
 	if (ret == 0) {
-		lua_pushnil(L);
-		lua_pushstring(L, "Error, delay is not an integer");
-		return 2;
+		if (lua_type(L, 1) != LUA_TNUMBER) {
+			lua_pushnil(L);
+			lua_pushstring(L, "Error, delay is not an integer");
+			return 2;
+		}
+		delaysec = (long long) lua_tonumber(L, 1);
+	} else
+		delaysec = (long long) luai;
+
+	if (delaysec == 0) {
+		lua_pushinteger(L, 0);
+		return 1;
 	}
 
-	delaysec = (long) luai;
-	if (delaysec <= 0) {
+	if (delaysec < 0) {
 		int dsec = (int) delaysec;
 		lua_pushnil(L);
 		lua_pushfstring(L, "Error, invalid delay in seconds: %d", dsec);
@@ -150,7 +159,7 @@ static int sysutil_common_delay(lua_State * L, int issec)
 		delay.tv_nsec = 0;
 	} else {
 		delay.tv_sec = (time_t) (delaysec / 1000);
-		delay.tv_nsec = (delaysec % 1000) * 1000000;
+		delay.tv_nsec = (long) ((delaysec % 1000) * 1000000);
 	}
 
 	if (argc >= 2 && lua_type(L, 2) == LUA_TBOOLEAN) {
@@ -1542,6 +1551,40 @@ static int sysutil_chmod(lua_State * L)
 	return 1;
 }
 
+static int sysutil_upmsec(lua_State * L)
+{
+	int ret;
+	struct timespec nowt;
+	unsigned long long res;
+
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	nowt.tv_sec = 0;
+	nowt.tv_nsec = 0;
+	ret = clock_gettime(CLOCK_BOOTTIME, &nowt);
+	if (ret == -1) {
+		ret = clock_gettime(CLOCK_MONOTONIC, &nowt);
+		if (ret == -1) {
+			int error = errno;
+			fprintf(stderr, "Error, failed to determine system uptime: %s\n",
+				strerror(error));
+			fflush(stderr);
+			errno = error;
+			return 0;
+		}
+	}
+
+	res = (unsigned long long) nowt.tv_sec;
+	res = res * 1000 + (unsigned long long) (nowt.tv_nsec / 1000000);
+#if LUA_VERSION_NUM < 503
+	lua_pushnumber(L, (lua_Number) res);
+#else
+	lua_pushinteger(L, (lua_Integer) res);
+#endif
+	return 1;
+}
+
 static const luaL_Reg sysutil_regs[] = {
 	{ "call",           sysutil_call },
 	{ "chdir",          sysutil_chdir },
@@ -1569,6 +1612,7 @@ static const luaL_Reg sysutil_regs[] = {
 	{ "sync",           sysutil_sync },
 	{ "tcpcheck",       sysutil_tcpcheck },
 	{ "unlink",         sysutil_unlink },
+	{ "upmsec",         sysutil_upmsec },
 	{ "uptime",         sysutil_uptime },
 	{ "waitpid",        sysutil_waitpid },
 	{ "zipstdio",       sysutil_zipstdio },
