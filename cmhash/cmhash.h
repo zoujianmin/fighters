@@ -60,6 +60,8 @@ int cmhash_delval(cmhash_t * chash,
 
 void cmhash_delete(cmhash_t * chash);
 
+unsigned int cmhash_count(cmhash_t chash);
+
 /*
  * Iterate over the hash set WITHOUT MODIFYING,
  * JUST DO NOT MODIFY THE HASH TABLE.
@@ -67,7 +69,7 @@ void cmhash_delete(cmhash_t * chash);
  * the iteration will stop.
  */
 int cmhash_iter(cmhash_t chash, void * ppriv,
-	int (* iter_func)(int, const cmhash_t, void *));
+	int (* iter_func)(int, void *, union cm_hval));
 
 #ifdef __cplusplus
 };

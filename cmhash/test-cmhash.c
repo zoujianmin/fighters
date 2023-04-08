@@ -84,6 +84,18 @@ static struct random_map * get_random_map(void)
 	return rmap;
 }
 
+static int iterate_lhash(int count, void * whatp, union cm_hval hval)
+{
+	struct random_map * rmap;
+
+	(void) whatp;
+	rmap = (struct random_map *) hval.cm_pointer;
+	fprintf(stdout, "[%02d] INFO, hash found: %p, '%s' => %#x\n",
+		count, rmap, rmap ? rmap->keystr : "", rmap ? rmap->value : 0);
+	fflush(stdout);
+	return 0;
+}
+
 #define HASH_NUM 32
 int main(int argc, char *argv[])
 {
@@ -119,6 +131,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	fprintf(stdout, "Number entries in the hash table: %u\n", cmhash_count(hash));
 	if (rmaps[HASH_NUM / 2] != NULL) {
 		union cm_hval cmval;
 		cm_hval_init(&cmval);
@@ -126,8 +139,9 @@ int main(int argc, char *argv[])
 			rmaps[HASH_NUM / 2]->keylen, &cmval);
 		fprintf(stdout, "remove from hash returns %d, %p, %p\n",
 			ret, rmaps[HASH_NUM / 2], cmval.cm_pointer);
-		fflush(stdout);
 	}
+	fprintf(stdout, "Number entries in the hash table: %u\n", cmhash_count(hash));
+	fflush(stdout);
 
 	for (idx = 0; idx < HASH_NUM; ++idx) {
 		union cm_hval cmval;
@@ -144,13 +158,16 @@ int main(int argc, char *argv[])
 				idx, rmap->keystr, ret);
 			fflush(stderr);
 		} else {
-			fprintf(stderr, "[%02d] INFO, hash found: %p, %p, key: '%s'\n",
-				idx, cmval.cm_pointer, rmap, rmap->keystr);
-			fflush(stderr);
+			fprintf(stdout, "[%02d] INFO, hash found: %p, %p, '%s' => %#x\n",
+				idx, cmval.cm_pointer, rmap, rmap->keystr, rmap->value);
+			fflush(stdout);
 		}
 		free(rmap);
 		rmaps[idx] = NULL;
 	}
+
+	fprintf(stdout, "=========================================================\n");
+	cmhash_iter(hash, NULL, iterate_lhash);
 
 	cmhash_delete(&hash);
 	close(rand_fd);

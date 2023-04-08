@@ -143,7 +143,7 @@ int cmhash_delval(cmhash_t * chash_,
 }
 
 int cmhash_iter(cmhash_t chash_, void * ppriv,
-	int (* iter_func)(int, const cmhash_t, void *))
+	int (* iter_func)(int, void *, union cm_hval))
 {
 	int count = 0;
 	struct cmhash * iterhash = NULL;
@@ -153,7 +153,7 @@ int cmhash_iter(cmhash_t chash_, void * ppriv,
 	if (chash == NULL || iter_func == NULL)
 		return -EINVAL;
 	HASH_ITER(cm_hh, chash, iterhash, temphash) {
-		if (iter_func(count, iterhash, ppriv) < 0)
+		if (iter_func(count, ppriv, iterhash->cm_val) < 0)
 			break;
 		count++;
 	}
@@ -181,4 +181,14 @@ void cmhash_delete(cmhash_t * chash_)
 	}
 	if (hashptr != oldhash)
 		*chash = hashptr;
+}
+
+unsigned int cmhash_count(cmhash_t chash_)
+{
+	unsigned int ret;
+	struct cmhash * chash;
+
+	chash = (struct cmhash *) chash_;
+	ret = HASH_CNT(cm_hh, chash);
+	return ret;
 }
