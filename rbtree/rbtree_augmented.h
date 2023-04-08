@@ -12,9 +12,7 @@
 #ifndef _LINUX_RBTREE_AUGMENTED_H
 #define _LINUX_RBTREE_AUGMENTED_H
 
-#include <linux/compiler.h>
-#include <linux/rbtree.h>
-#include <linux/rcupdate.h>
+#include <rbtree.h>
 
 /*
  * Please note - only struct rb_augment_callbacks and the prototypes for
@@ -176,19 +174,6 @@ __rb_change_child(struct rb_node *old, struct rb_node *new,
 			WRITE_ONCE(parent->rb_right, new);
 	} else
 		WRITE_ONCE(root->rb_node, new);
-}
-
-static inline void
-__rb_change_child_rcu(struct rb_node *old, struct rb_node *new,
-		      struct rb_node *parent, struct rb_root *root)
-{
-	if (parent) {
-		if (parent->rb_left == old)
-			rcu_assign_pointer(parent->rb_left, new);
-		else
-			rcu_assign_pointer(parent->rb_right, new);
-	} else
-		rcu_assign_pointer(root->rb_node, new);
 }
 
 extern void __rb_erase_color(struct rb_node *parent, struct rb_root *root,
