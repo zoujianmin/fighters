@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2021 Ye Holmes <yeholmes@outlook.com>
+# Copyright 2021, 2023 Ye Holmes <yeholmes@outlook.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -275,6 +275,7 @@ build_source() {
         # invoke the configuration function
         local fconf="${ftConfig[${srcn}]}"
         ${fconf} ; retw=$?
+        cd "${FTOPDIR}/${sbdir}"
         if [ $retw -ne 0 ] ; then
             echo "Error, failed to configure '${sbdir}'" 1>&2
             return 8
@@ -283,8 +284,6 @@ build_source() {
     fi
 
     local dobuild=1
-    # change to source directory again
-    cd "${FTOPDIR}/${sbdir}" || return 9
     [ -e "${TAG_BUILT}" ] && dobuild=0
     [ -e ".tag-rebuild" ] && dobuild=1
     if [ ${dobuild} -eq 0 ] ; then
@@ -293,10 +292,11 @@ build_source() {
         # invoke build function
         local fbuild="${ftBuild[${srcn}]}"
         ${fbuild} ; retw=$?
+        cd "${FTOPDIR}/${sbdir}"
         if [ $retw -ne 0 ] ; then
             [ -e "${TAG_BUILT}" ] && rm -rf "${TAG_BUILT}"
             echo "Error, failed to build '${sbdir}'" 1>&2
-            return 10
+            return 9
         fi
         touch "${TAG_BUILT}"
     fi
