@@ -90,7 +90,7 @@ __rb_insert(struct rb_node *node, struct rb_root *root,
 		/*
 		 * Loop invariant: node is red.
 		 */
-		if (unlikely(!parent)) {
+		if (__builtin_expect(!parent, 0)) {
 			/*
 			 * The inserted node is root. Either this is the
 			 * first node, or we recursed at Case 1 below and
