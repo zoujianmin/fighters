@@ -11,9 +11,9 @@
 #include <stdint.h>
 #include <rbtree_augmented.h>
 
-static int nnodes = 100; /* "Number of nodes in the rb-tree") */
-static int perf_loops = 1000; /* "Number of iterations modifying the rb-tree") */
-static int check_loops = 100; /* "Number of iterations modifying and verifying the rb-tree") */
+static int nnodes = 800; /* "Number of nodes in the rb-tree") */
+static int perf_loops = 4000; /* "Number of iterations modifying the rb-tree") */
+static int check_loops = 400; /* "Number of iterations modifying and verifying the rb-tree") */
 
 struct test_node {
 	uint32_t key;
@@ -436,6 +436,7 @@ int main(void)
 	time = div_u64(time, perf_loops);
 	fprintf(stdout, " -> test 2 (latency of nnodes cached insert+delete): %llu cycles\n", (unsigned long long)time);
 
+	time1 = get_cycles();
 	for (i = 0; i < check_loops; i++) {
 		init();
 		for (j = 0; j < nnodes; j++) {
@@ -448,6 +449,12 @@ int main(void)
 		}
 		check_augmented(0);
 	}
+
+	time2 = get_cycles();
+	time = time2 - time1;
+
+	time = div_u64(time, check_loops);
+	fprintf(stdout, " -> test 3 (latency of nnodes augmented insert+delete): %llu cycles\n", (unsigned long long)time);
 
 	free(nodes);
 	close(rnd); rnd = -1;
