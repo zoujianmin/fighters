@@ -97,6 +97,11 @@ void hashmapLock(Hashmap* map);
  */
 void hashmapUnlock(Hashmap* map);
 
+/* use djb hash unless we find it inadequate */
+int str_hash_fn(void *str);
+
+bool str_hash_eq(void *key_a, void *key_b);
+
 #ifdef __cplusplus
 }
 #endif

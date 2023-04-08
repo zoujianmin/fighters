@@ -272,3 +272,21 @@ void hashmapForEach(Hashmap* map, bool (*callback)(void* key, void* value, void*
         }
     }
 }
+
+bool str_hash_eq(void *key_a, void *key_b)
+{
+    return !strcmp((const char *)key_a, (const char *)key_b);
+}
+
+/* use djb hash unless we find it inadequate */
+#ifdef __clang__
+__attribute__((no_sanitize("integer")))
+#endif
+int str_hash_fn(void *str)
+{
+    unsigned int hash = 5381;
+
+    for (char* p = (char *) str; p && *p; p++)
+        hash = ((hash << 5) + hash) + *p;
+    return (int)hash;
+}
