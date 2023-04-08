@@ -18,6 +18,8 @@
 extern "C" {
 #endif
 
+#define WRITE_ONCE(_lexpr_, _rexpr_) _lexpr_ = _rexpr_
+
 /*
  * Please note - only struct rb_augment_callbacks and the prototypes for
  * rb_insert_augmented() and rb_erase_augmented() are intended to be public.
