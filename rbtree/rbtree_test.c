@@ -1,38 +1,89 @@
 // SPDX-License-Identifier: GPL-2.0-only
-#include <linux/module.h>
-#include <linux/moduleparam.h>
-#include <linux/rbtree_augmented.h>
-#include <linux/random.h>
-#include <linux/slab.h>
-#include <asm/timex.h>
+#include <errno.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <time.h>
 
-#define __param(type, name, init, msg)		\
-	static type name = init;		\
-	module_param(name, type, 0444);		\
-	MODULE_PARM_DESC(name, msg);
+#include <stdint.h>
+#include <rbtree_augmented.h>
 
-__param(int, nnodes, 100, "Number of nodes in the rb-tree");
-__param(int, perf_loops, 1000, "Number of iterations modifying the rb-tree");
-__param(int, check_loops, 100, "Number of iterations modifying and verifying the rb-tree");
+static int nnodes = 100; /* "Number of nodes in the rb-tree") */
+static int perf_loops = 1000; /* "Number of iterations modifying the rb-tree") */
+static int check_loops = 100; /* "Number of iterations modifying and verifying the rb-tree") */
 
 struct test_node {
-	u32 key;
+	uint32_t key;
 	struct rb_node rb;
 
 	/* following fields used for testing augmented rbtree functionality */
-	u32 val;
-	u32 augmented;
+	uint32_t val;
+	uint32_t augmented;
 };
 
 static struct rb_root_cached root = RB_ROOT_CACHED;
 static struct test_node *nodes = NULL;
 
-static struct rnd_state rnd;
+static int rnd = -1;
+
+#ifndef WARN_ON_ONCE
+#define WARN_ON_ONCE(expr_) warn_on_once(#expr_, expr_, __LINE__)
+#endif
+static unsigned long long div_u64(unsigned long long a, int b)
+{
+	if (b <= 0)
+		return 0;
+	return a / (unsigned long long) b;
+}
+
+static void warn_on_once(const char * expr, int _expr, int lino)
+{
+	if (_expr) {
+		fprintf(stderr, "Warning, '%s' at line %d\n", expr, lino);
+		fflush(stderr);
+	}
+}
+
+static unsigned int prandom_u32_state(int rfd)
+{
+	unsigned int rval = 0;
+	if (read(rfd, &rval, sizeof(rval)) != (ssize_t) sizeof(rval)) {
+		fprintf(stderr, "Error, failed to read %d: %s\n", rfd, strerror(errno));
+		fflush(stderr);
+	}
+	return rval;
+}
+
+static unsigned long long get_cycles(void)
+{
+	int ret;
+	struct timespec spec;
+	unsigned long long rval;
+
+	spec.tv_sec = 0;
+	spec.tv_nsec = 0;
+	ret = clock_gettime(CLOCK_THREAD_CPUTIME_ID, &spec);
+	if (ret == -1) {
+		abort();
+	}
+
+#if 1
+	rval = (unsigned long long) spec.tv_sec;
+	rval = (rval * 1000000000) + (unsigned long long) spec.tv_nsec;
+#else
+	rval = (unsigned long long) spec.tv_sec;
+	rval = (rval * 1000000) + (unsigned long long) (spec.tv_nsec / 1000);
+#endif
+	return rval;
+}
 
 static void insert(struct test_node *node, struct rb_root_cached *root)
 {
 	struct rb_node **new = &root->rb_root.rb_node, *parent = NULL;
-	u32 key = node->key;
+	uint32_t key = node->key;
 
 	while (*new) {
 		parent = *new;
@@ -49,7 +100,7 @@ static void insert(struct test_node *node, struct rb_root_cached *root)
 static void insert_cached(struct test_node *node, struct rb_root_cached *root)
 {
 	struct rb_node **new = &root->rb_root.rb_node, *parent = NULL;
-	u32 key = node->key;
+	uint32_t key = node->key;
 	bool leftmost = true;
 
 	while (*new) {
@@ -80,14 +131,14 @@ static inline void erase_cached(struct test_node *node, struct rb_root_cached *r
 #define NODE_VAL(node) ((node)->val)
 
 RB_DECLARE_CALLBACKS_MAX(static, augment_callbacks,
-			 struct test_node, rb, u32, augmented, NODE_VAL)
+			 struct test_node, rb, uint32_t, augmented, NODE_VAL)
 
 static void insert_augmented(struct test_node *node,
 			     struct rb_root_cached *root)
 {
 	struct rb_node **new = &root->rb_root.rb_node, *rb_parent = NULL;
-	u32 key = node->key;
-	u32 val = node->val;
+	uint32_t key = node->key;
+	uint32_t val = node->val;
 	struct test_node *parent;
 
 	while (*new) {
@@ -110,8 +161,8 @@ static void insert_augmented_cached(struct test_node *node,
 				    struct rb_root_cached *root)
 {
 	struct rb_node **new = &root->rb_root.rb_node, *rb_parent = NULL;
-	u32 key = node->key;
-	u32 val = node->val;
+	uint32_t key = node->key;
+	uint32_t val = node->val;
 	struct test_node *parent;
 	bool leftmost = true;
 
@@ -150,8 +201,8 @@ static void init(void)
 {
 	int i;
 	for (i = 0; i < nnodes; i++) {
-		nodes[i].key = prandom_u32_state(&rnd);
-		nodes[i].val = prandom_u32_state(&rnd);
+		nodes[i].key = prandom_u32_state(rnd);
+		nodes[i].val = prandom_u32_state(rnd);
 	}
 }
 
@@ -192,7 +243,7 @@ static void check(int nr_nodes)
 {
 	struct rb_node *rb;
 	int count = 0, blacks = 0;
-	u32 prev_key = 0;
+	uint32_t prev_key = 0;
 
 	for (rb = rb_first(&root.rb_root); rb; rb = rb_next(rb)) {
 		struct test_node *node = rb_entry(rb, struct test_node, rb);
@@ -222,7 +273,7 @@ static void check_augmented(int nr_nodes)
 	check(nr_nodes);
 	for (rb = rb_first(&root.rb_root); rb; rb = rb_next(rb)) {
 		struct test_node *node = rb_entry(rb, struct test_node, rb);
-		u32 subtree, max = node->val;
+		uint32_t subtree, max = node->val;
 		if (node->rb.rb_left) {
 			subtree = rb_entry(node->rb.rb_left, struct test_node,
 					   rb)->augmented;
@@ -239,19 +290,27 @@ static void check_augmented(int nr_nodes)
 	}
 }
 
-static int __init rbtree_test_init(void)
+int main(void)
 {
 	int i, j;
-	cycles_t time1, time2, time;
+	unsigned long long time1, time2, time;
 	struct rb_node *node;
 
-	nodes = kmalloc_array(nnodes, sizeof(*nodes), GFP_KERNEL);
+	rnd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+	if (rnd == -1) {
+		fprintf(stderr, "Error, failed to open random device: %s\n",
+			strerror(errno));
+		fflush(stderr);
+		return 1;
+	}
+
+	nodes = (struct test_node *) calloc(nnodes, sizeof(*nodes));
 	if (!nodes)
 		return -ENOMEM;
 
-	printk(KERN_ALERT "rbtree testing");
+	fprintf(stdout, "rbtree testing...\n");
 
-	prandom_seed_state(&rnd, 3141592653589793238ULL);
+	/* prandom_seed_state(&rnd, 3141592653589793238ULL); */
 	init();
 
 	time1 = get_cycles();
@@ -267,7 +326,7 @@ static int __init rbtree_test_init(void)
 	time = time2 - time1;
 
 	time = div_u64(time, perf_loops);
-	printk(" -> test 1 (latency of nnodes insert+delete): %llu cycles\n",
+	fprintf(stdout, " -> test 1 (latency of nnodes insert+delete): %llu cycles\n",
 	       (unsigned long long)time);
 
 	time1 = get_cycles();
@@ -283,7 +342,7 @@ static int __init rbtree_test_init(void)
 	time = time2 - time1;
 
 	time = div_u64(time, perf_loops);
-	printk(" -> test 2 (latency of nnodes cached insert+delete): %llu cycles\n",
+	fprintf(stdout, " -> test 2 (latency of nnodes cached insert+delete): %llu cycles\n",
 	       (unsigned long long)time);
 
 	for (i = 0; i < nnodes; i++)
@@ -300,7 +359,7 @@ static int __init rbtree_test_init(void)
 	time = time2 - time1;
 
 	time = div_u64(time, perf_loops);
-	printk(" -> test 3 (latency of inorder traversal): %llu cycles\n",
+	fprintf(stdout, " -> test 3 (latency of inorder traversal): %llu cycles\n",
 	       (unsigned long long)time);
 
 	time1 = get_cycles();
@@ -312,8 +371,8 @@ static int __init rbtree_test_init(void)
 	time = time2 - time1;
 
 	time = div_u64(time, perf_loops);
-	printk(" -> test 4 (latency to fetch first node)\n");
-	printk("        non-cached: %llu cycles\n", (unsigned long long)time);
+	fprintf(stdout, " -> test 4 (latency to fetch first node)\n");
+	fprintf(stdout, "        non-cached: %llu cycles\n", (unsigned long long)time);
 
 	time1 = get_cycles();
 
@@ -324,7 +383,7 @@ static int __init rbtree_test_init(void)
 	time = time2 - time1;
 
 	time = div_u64(time, perf_loops);
-	printk("        cached: %llu cycles\n", (unsigned long long)time);
+	fprintf(stdout, "        cached: %llu cycles\n", (unsigned long long)time);
 
 	for (i = 0; i < nnodes; i++)
 		erase(nodes + i, &root);
@@ -343,7 +402,7 @@ static int __init rbtree_test_init(void)
 		check(0);
 	}
 
-	printk(KERN_ALERT "augmented rbtree testing");
+	fprintf(stdout, "augmented rbtree testing...\n");
 
 	init();
 
@@ -360,7 +419,7 @@ static int __init rbtree_test_init(void)
 	time = time2 - time1;
 
 	time = div_u64(time, perf_loops);
-	printk(" -> test 1 (latency of nnodes insert+delete): %llu cycles\n", (unsigned long long)time);
+	fprintf(stdout, " -> test 1 (latency of nnodes insert+delete): %llu cycles\n", (unsigned long long)time);
 
 	time1 = get_cycles();
 
@@ -375,7 +434,7 @@ static int __init rbtree_test_init(void)
 	time = time2 - time1;
 
 	time = div_u64(time, perf_loops);
-	printk(" -> test 2 (latency of nnodes cached insert+delete): %llu cycles\n", (unsigned long long)time);
+	fprintf(stdout, " -> test 2 (latency of nnodes cached insert+delete): %llu cycles\n", (unsigned long long)time);
 
 	for (i = 0; i < check_loops; i++) {
 		init();
@@ -390,19 +449,14 @@ static int __init rbtree_test_init(void)
 		check_augmented(0);
 	}
 
-	kfree(nodes);
-
-	return -EAGAIN; /* Fail will directly unload the module */
+	free(nodes);
+	close(rnd); rnd = -1;
+	return 0;
+	/* return -EAGAIN; Fail will directly unload the module */
 }
 
-static void __exit rbtree_test_exit(void)
-{
-	printk(KERN_ALERT "test exit\n");
-}
-
-module_init(rbtree_test_init)
-module_exit(rbtree_test_exit)
-
+/*
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Michel Lespinasse");
 MODULE_DESCRIPTION("Red Black Tree test");
+*/
