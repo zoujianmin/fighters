@@ -19,6 +19,10 @@
 
 #include <stddef.h>
 
+#ifndef __always_inline
+#define __always_inline __attribute__((__always_inline__))
+#endif
+
 /* #include <linux/container_of.h> */
 
 #ifndef container_of
