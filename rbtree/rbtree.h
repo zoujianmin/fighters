@@ -18,6 +18,10 @@
 #define	_LINUX_RBTREE_H
 
 #include <stddef.h>
+#include <stdbool.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #ifndef __always_inline
 #define __always_inline __attribute__((__always_inline__))
@@ -359,4 +363,7 @@ rb_next_match(const void *key, struct rb_node *node,
 	for ((node) = rb_find_first((key), (tree), (cmp)); \
 	     (node); (node) = rb_next_match((key), (node), (cmp)))
 
+#ifdef __cplusplus
+};
+#endif
 #endif	/* _LINUX_RBTREE_H */
