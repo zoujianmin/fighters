@@ -16,13 +16,16 @@ MAKEFLAGS += -r -R
 CC         = gcc
 STRIP      = strip
 CFLAGS     = -Wall -fPIC -D_GNU_SOURCE -ggdb -Os -I.
-TARGETS    = hashmap.o
+TARGETS    = hashmap.o rbtree.o rbtree_test.o rbtree_test
 
 .PHONY: all clean
 all: $(TARGETS)
 
-%.o: %.c hashmap.h
+%.o: %.c hashmap.h rbtree.h
 	$(CC) -c $(CFLAGS) -o $@ $<
+
+rbtree_test: rbtree_test.o rbtree.o
+	$(CC) -o $@ $^
 
 clean:
 	rm -rf *.o $(TARGETS)
