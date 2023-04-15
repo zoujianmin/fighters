@@ -143,7 +143,7 @@ int cmhash_delval(cmhash_t * chash_,
 }
 
 int cmhash_iter(cmhash_t chash_, void * ppriv,
-	int (* iter_func)(int, void *, union cm_hval))
+	int (* iter_func)(int, void *, const union cm_hval *))
 {
 	int count = 0;
 	struct cmhash * iterhash = NULL;
@@ -153,11 +153,31 @@ int cmhash_iter(cmhash_t chash_, void * ppriv,
 	if (chash == NULL || iter_func == NULL)
 		return -EINVAL;
 	HASH_ITER(cm_hh, chash, iterhash, temphash) {
-		if (iter_func(count, ppriv, iterhash->cm_val) < 0)
+		if (iter_func(count, ppriv, &iterhash->cm_val) < 0)
 			break;
 		count++;
 	}
 	return 0;
+}
+
+const void * cmhash_getkey(const union cm_hval * cval, unsigned int * key_len)
+{
+	struct cmhash * chash;
+	unsigned char * valaddr;
+	unsigned char * valoffs;
+
+	chash = NULL;
+	if (cval == NULL)
+		return NULL;
+
+	/* TODO: use `container_of macro */
+	valaddr = (unsigned char *) cval;
+	valoffs = (unsigned char *) &(chash->cm_val);
+	chash = (struct cmhash *) (valaddr - valoffs);
+
+	if (key_len != NULL)
+		*key_len = chash->cm_klen;
+	return (const void *) chash->cm_key;
 }
 
 void cmhash_delete(cmhash_t * chash_)

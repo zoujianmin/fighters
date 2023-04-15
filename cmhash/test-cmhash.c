@@ -84,14 +84,29 @@ static struct random_map * get_random_map(void)
 	return rmap;
 }
 
-static int iterate_lhash(int count, void * whatp, union cm_hval hval)
+static int iterate_lhash(int count, void * whatp, const union cm_hval * hval)
 {
+	char tbuf[256];
+	unsigned int keylen;
 	struct random_map * rmap;
+	const unsigned char * keystr;
 
 	(void) whatp;
-	rmap = (struct random_map *) hval.cm_pointer;
+	keylen = 0;
+	tbuf[0] = '\0';
+	keystr = cmhash_getkey(hval, &keylen);
+	if (keystr && keylen && (keylen * 0x2 + 0x1) < sizeof(tbuf)) {
+		int jlen = 0;
+		unsigned int klen;
+		for (klen = 0; klen < keylen; ++klen) {
+			jlen += snprintf(&tbuf[jlen], sizeof(tbuf) - jlen,
+				"%02x", (unsigned int) keystr[klen]);
+		}
+	}
+
+	rmap = (struct random_map *) hval->cm_pointer;
 	fprintf(stdout, "[%02d] INFO, hash found: %p, '%s' => %#x\n",
-		count, rmap, rmap ? rmap->keystr : "", rmap ? rmap->value : 0);
+		count, rmap, tbuf, rmap ? rmap->value : 0);
 	fflush(stdout);
 	return 0;
 }

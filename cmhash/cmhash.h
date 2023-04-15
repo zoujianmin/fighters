@@ -69,7 +69,10 @@ unsigned int cmhash_count(cmhash_t chash);
  * the iteration will stop.
  */
 int cmhash_iter(cmhash_t chash, void * ppriv,
-	int (* iter_func)(int, void *, union cm_hval));
+	int (* iter_func)(int, void *, const union cm_hval *));
+
+const void * cmhash_getkey(const union cm_hval * cval,
+	unsigned int * key_len);
 
 #ifdef __cplusplus
 };
