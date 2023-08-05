@@ -1712,6 +1712,51 @@ static int sysutil_open(lua_State * L)
 	return 1;
 }
 
+static int sysutil_lseek(lua_State * L)
+{
+	off_t offs, off1;
+	lua_Integer l_num;
+	int pfd, where, ntop;
+
+	offs = 0;
+	pfd = where = -1;
+	ntop = lua_gettop(L);
+	if (ntop <= 0) {
+		lua_pushnil(L);
+		lua_pushstring(L, "no argument given to lseek");
+		return 2;
+	}
+
+	l_num = -1;
+	if (ntop >= 1 && sysutil_isinteger(L, 1, &l_num))
+		pfd = (int) l_num;
+
+	l_num = 0;
+	if (ntop >= 2 && lua_isnumber(L, 2))
+		offs = (off_t) lua_tonumber(L, 2);
+
+	l_num = 0;
+	if (ntop >= 3 && sysutil_isinteger(L, 3, &l_num))
+		where = (int) l_num;
+
+	if (pfd < 0 || (where != SEEK_SET && where != SEEK_CUR && where != SEEK_END)) {
+		lua_pushnil(L);
+		lua_pushfstring(L, "invalid arguments for lseek: %d, %d", pfd, where);
+		return 2;
+	}
+
+	off1 = lseek(pfd, offs, where);
+	if (off1 == (off_t) -1l) {
+		int error = errno;
+		lua_pushnil(L);
+		lua_pushfstring(L, "lseek has failed: %s", strerror(error));
+		return 2;
+	}
+
+	lua_pushnumber(L, (lua_Number) off1);
+	return 1;
+}
+
 static const luaL_Reg sysutil_regs[] = {
 	{ "call",           sysutil_call },
 	{ "chdir",          sysutil_chdir },
@@ -1727,6 +1772,7 @@ static const luaL_Reg sysutil_regs[] = {
 	{ "kill",           sysutil_kill },
 	{ "killid",         sysutil_killid },      /* calls pthread_kill(...) */
 	{ "killpg",         sysutil_killpg },
+	{ "lseek",          sysutil_lseek },
 	{ "mdelay",         sysutil_mdelay },
 	{ "mkdir",          sysutil_mkdir },
 	{ "mkfifo",         sysutil_mkfifo },
@@ -1791,6 +1837,15 @@ int luaopen_sysutil(lua_State * L)
 
 	lua_pushinteger(L, ECONNREFUSED);
 	lua_setfield(L, -2, "ECONNREFUSED");
+
+	lua_pushinteger(L, SEEK_SET);
+	lua_setfield(L, -2, "SEEK_SET");
+
+	lua_pushinteger(L, SEEK_CUR);
+	lua_setfield(L, -2, "SEEK_CUR");
+
+	lua_pushinteger(L, SEEK_END);
+	lua_setfield(L, -2, "SEEK_END");
 
 	/* flags for glob(...) function: */
 	SYSUTIL_PUSHINT(GLOB_ERR);
