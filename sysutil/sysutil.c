@@ -1786,6 +1786,12 @@ int luaopen_sysutil(lua_State * L)
 	lua_pushinteger(L, APPUTIL_OPTION_SYMLINK);
 	lua_setfield(L, -2, "OPT_SYMLINK");
 
+	lua_pushinteger(L, ETIMEDOUT);
+	lua_setfield(L, -2, "ETIMEDOUT");
+
+	lua_pushinteger(L, ECONNREFUSED);
+	lua_setfield(L, -2, "ECONNREFUSED");
+
 	/* flags for glob(...) function: */
 	SYSUTIL_PUSHINT(GLOB_ERR);
 	SYSUTIL_PUSHINT(GLOB_MARK);

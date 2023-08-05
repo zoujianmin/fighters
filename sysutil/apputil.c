@@ -642,7 +642,9 @@ int apputil_call(apputil_t app_, const void * indata, unsigned int inlen)
 
 		if (opts & APPUTIL_OPTION_LOWPRI) {
 			struct sched_param spa;
-			ret = nice(19);
+			errno = 0;
+			ret = nice(0);
+			ret = (errno == 0 && ret < 19) ? nice(19 - ret) : 0;
 			if (ret == -1) {
 				error = errno;
 				fprintf(stderr, "Error, nice(19) has failed: %s\n",
