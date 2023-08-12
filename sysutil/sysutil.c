@@ -42,6 +42,7 @@
 #include "zsha256_util.h"
 
 #include <glob.h> /* request for glob function */
+#include <ctype.h>
 
 extern int luaopen_sysutil(lua_State * L);
 
@@ -1757,6 +1758,40 @@ static int sysutil_lseek(lua_State * L)
 	return 1;
 }
 
+static int sysutil_strerror(lua_State * L)
+{
+	int ntop;
+	char errmsg[192];
+	lua_Integer lua_i;
+	unsigned long rval;
+
+	lua_i = 0;
+	if (sysutil_checkstack(L, 1) < 0)
+		return 0;
+
+	ntop = lua_gettop(L);
+	if (ntop >= 1)
+		sysutil_isinteger(L, 1, &lua_i);
+
+	memset(errmsg, 0, sizeof(errmsg));
+	rval = (unsigned long) strerror_r((int) lua_i, errmsg, sizeof(errmsg) - 1);
+	if (errmsg[0] && isprint(errmsg[0])) {
+		lua_pushstring(L, errmsg);
+		return 1;
+	}
+
+	if (rval >= 128 && rval != ~0ul) {
+		const char * ptr = (const char *) rval;
+		if (ptr[0] && isprint(ptr[0])) {
+			lua_pushstring(L, ptr);
+			return 1;
+		}
+	}
+
+	lua_pushfstring(L, "unknown error %d", (int) lua_i);
+	return 1;
+}
+
 static const luaL_Reg sysutil_regs[] = {
 	{ "call",           sysutil_call },
 	{ "chdir",          sysutil_chdir },
@@ -1784,6 +1819,7 @@ static const luaL_Reg sysutil_regs[] = {
 	{ "setname",        sysutil_setname },
 	{ "sha256",         sysutil_sha256 },
 	{ "stat",           sysutil_stat },
+	{ "strerror",       sysutil_strerror },
 	{ "symlink",        sysutil_symlink },
 	{ "sync",           sysutil_sync },
 	{ "tcpcheck",       sysutil_tcpcheck },

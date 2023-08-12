@@ -16,7 +16,7 @@ MAKEFLAGS += -r -R
 CC         = gcc
 STRIP      = strip
 CFLAGS     = -Wall -fPIC -D_GNU_SOURCE -ggdb -Os -I.
-CFLAGS    += -I/opt/fight_x64/include/luajit-2.1
+CFLAGS    += -I/opt/ub1204/include/lua5.1
 LDFLAGS   := -lpthread
 TARGETS    = apputil.o sysutil.so sysutil.o zsha256_util.o zsha256_test.o zsha256
 
