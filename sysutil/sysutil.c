@@ -42,7 +42,6 @@
 #include "zsha256_util.h"
 
 #include <glob.h> /* request for glob function */
-#include <ctype.h>
 
 extern int luaopen_sysutil(lua_State * L);
 
@@ -1766,7 +1765,7 @@ static int sysutil_strerror(lua_State * L)
 	unsigned long rval;
 
 	lua_i = 0;
-	if (sysutil_checkstack(L, 1) < 0)
+	if (sysutil_checkstack(L, 2) < 0)
 		return 0;
 
 	ntop = lua_gettop(L);
@@ -1775,14 +1774,14 @@ static int sysutil_strerror(lua_State * L)
 
 	memset(errmsg, 0, sizeof(errmsg));
 	rval = (unsigned long) strerror_r((int) lua_i, errmsg, sizeof(errmsg) - 1);
-	if (errmsg[0] && isprint(errmsg[0])) {
+	if (errmsg[0] != '\0') {
 		lua_pushstring(L, errmsg);
 		return 1;
 	}
 
 	if (rval >= 128 && rval != ~0ul) {
 		const char * ptr = (const char *) rval;
-		if (ptr[0] && isprint(ptr[0])) {
+		if (ptr[0] != '\0') {
 			lua_pushstring(L, ptr);
 			return 1;
 		}
@@ -1832,6 +1831,44 @@ static int sysutil_getenv(lua_State * L)
 	return 1;
 }
 
+static int sysutil_setenv(lua_State * L)
+{
+	int rval, ntop;
+	const char * envp;
+	const char * valp;
+
+	rval = 0;
+	envp = valp = NULL;
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	ntop = lua_gettop(L);
+	if (ntop >= 1 && lua_isstring(L, 1))
+		envp = lua_tolstring(L, 1, NULL);
+	if (envp == NULL || envp[0] == '\0')
+		goto err0;
+
+	if (ntop >= 2 && lua_isstring(L, 2))
+		valp = lua_tolstring(L, 2, NULL);
+
+	if (valp && valp[0] != '\0') {
+		int override = 0;
+		if (ntop >= 3 && lua_isboolean(L, 3))
+			override = lua_toboolean(L, 3);
+		errno = 0;
+		rval = setenv(envp, valp, override);
+	} else {
+		errno = 0;
+		rval = unsetenv(envp);
+	}
+
+	if (rval == -1)
+		rval = errno;
+err0:
+	lua_pushboolean(L, rval);
+	return 1;
+}
+
 static const luaL_Reg sysutil_regs[] = {
 	{ "call",           sysutil_call },
 	{ "chdir",          sysutil_chdir },
@@ -1857,6 +1894,7 @@ static const luaL_Reg sysutil_regs[] = {
 	{ "read",           sysutil_read },
 	{ "readlink",       sysutil_readlink },
 	{ "rmdir",          sysutil_rmdir },
+	{ "setenv",         sysutil_setenv },
 	{ "setname",        sysutil_setname },
 	{ "sha256",         sysutil_sha256 },
 	{ "stat",           sysutil_stat },
