@@ -1792,6 +1792,46 @@ static int sysutil_strerror(lua_State * L)
 	return 1;
 }
 
+static int sysutil_getenv(lua_State * L)
+{
+	int ntop;
+	char * dupstr;
+	const char * envp;
+	const char * valp;
+
+	dupstr = NULL;
+	envp = valp = NULL;
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	ntop = lua_gettop(L);
+	if (ntop >= 1 && lua_isstring(L, 1))
+		envp = lua_tolstring(L, 1, NULL);
+
+	if (envp == NULL || envp[0] == '\0') {
+		lua_pushboolean(L, 0);
+		return 1;
+	}
+
+	dupstr = (char *) calloc(0x1, APPUTIL_BUFSIZE);
+	if (dupstr == NULL) {
+		lua_pushboolean(L, 0);
+		return 1;
+	}
+
+	valp = getenv(envp);
+	if (valp == NULL) {
+		free(dupstr);
+		lua_pushboolean(L, 0);
+		return 1;
+	}
+
+	strncpy(dupstr, valp, APPUTIL_BUFSIZE - 1);
+	lua_pushstring(L, dupstr);
+	free(dupstr);
+	return 1;
+}
+
 static const luaL_Reg sysutil_regs[] = {
 	{ "call",           sysutil_call },
 	{ "chdir",          sysutil_chdir },
@@ -1799,6 +1839,7 @@ static const luaL_Reg sysutil_regs[] = {
 	{ "cloexec",        sysutil_cloexec },
 	{ "close",          sysutil_close },
 	{ "delay",          sysutil_delay },
+	{ "getenv",         sysutil_getenv },
 	{ "getid",          sysutil_getid },       /* calls pthread_self() */
 	{ "getpid",         sysutil_getpid },
 	{ "getppid",        sysutil_getppid },
