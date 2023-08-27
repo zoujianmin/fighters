@@ -196,6 +196,17 @@ fetch_source_dir() {
     return 0
 }
 
+# check whether the source package has been enabled
+srcpkg_enabled() {
+	local resp=''
+	[ -z "$1" ] && return 1
+	eval "resp=\${SRCPKG_$1}"
+	[ -z "${resp}" ] && return 0
+	[ "${resp}" = "y" ] && return 0
+	[ "${resp}" = "1" ] && return 0
+	return 2
+}
+
 # register a source package to the list, `srcList
 register_source() {
     local -r srcpkg="$1"
