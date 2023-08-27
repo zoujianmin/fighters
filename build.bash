@@ -205,16 +205,6 @@ register_source() {
         return 1
     fi
 
-    # check whether the source package has been disabled
-    if [ -n "$5" ] ; then
-        local srcpkgDisable=0
-        eval "srcpkgDisable=\${srcpkg_disable_$5}"
-        if [ "${srcpkgDisable}" = "y" ] ; then
-            echo "INFO: source package disabled: '${srcpkg}'"
-            return 0
-        fi
-    fi
-
     # check the configure/build/clean functions
     check_function "${srcpkg}" "$2" || return 2
     check_function "${srcpkg}" "$3" || return 3
