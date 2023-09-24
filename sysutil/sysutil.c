@@ -31,10 +31,7 @@
 #include <netdb.h>
 #include <pthread.h>
 #include <sys/prctl.h>
-#ifndef __GLIBC__
-  /* for syscall(...), gettid */
-  #include <sys/syscall.h>
-#endif
+#include <termios.h>
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -1009,20 +1006,6 @@ static int sysutil_getppid(lua_State * L)
 	return 1;
 }
 
-static int sysutil_gettid(lua_State * L)
-{
-	long pid;
-	if (sysutil_checkstack(L, 1) < 0)
-		return 0;
-#ifdef __GLIBC__
-	pid = (long) gettid();
-#else
-	pid = syscall(SYS_gettid, 0);
-#endif
-	lua_pushinteger(L, (lua_Integer) pid);
-	return 1;
-}
-
 static int sysutil_getid(lua_State * L)
 {
 	pthread_t tid;
@@ -1869,6 +1852,119 @@ err0:
 	return 1;
 }
 
+static int sysutil_readpass(lua_State * L)
+{
+	size_t plen;
+	char * pbuf;
+	int error, verbose;
+	int ret, inflag, infd;
+	struct termios tios, olds;
+
+	error = 0;
+	verbose = 0;
+	pbuf = NULL;
+	infd = STDIN_FILENO;
+
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+
+	ret = lua_gettop(L);
+	if (ret >= 1 && lua_type(L, 1) == LUA_TBOOLEAN)
+		verbose = lua_toboolean(L, 1);
+
+	/* flush standard input buffer */
+	tcflush(infd, TCIFLUSH);
+
+	inflag = fcntl(infd, F_GETFL, 0);
+	if (inflag < 0) {
+		error = errno;
+		lua_pushnil(L);
+		lua_pushfstring(L, "failed to get stdin file status: %s", strerror(error));
+		return 2;
+	}
+
+	ret = inflag & ~O_NONBLOCK;
+	/* enable blocking mode for stdin */
+	ret = fcntl(infd, F_SETFL, ret);
+	if (ret < 0) {
+		error = errno;
+		lua_pushnil(L);
+		lua_pushfstring(L, "failed to set stdin file status: %s", strerror(error));
+		return 2;
+	}
+
+	/* get terminal IO status */
+	memset(&olds, 0, sizeof(olds));
+	ret = tcgetattr(infd, &olds);
+	if (ret < 0) {
+		error = errno;
+		lua_pushnil(L);
+		lua_pushfstring(L, "failed to get stdin termios: %s", strerror(error));
+		fcntl(infd, F_SETFL, inflag);
+		return 2;
+	}
+
+	memcpy(&tios, &olds, sizeof(tios));
+	tios.c_oflag = 0;
+	tios.c_lflag &= ~(ECHO | ICANON | ISIG); /* disable echo from stdin */
+	tios.c_iflag &= ~(INLCR | IGNCR);
+	tios.c_iflag |= ICRNL;
+	ret = tcsetattr(infd, TCSANOW, &tios);
+	if (ret < 0) {
+		error = errno;
+		lua_pushnil(L);
+		lua_pushfstring(L, "failed to disable echo for stdin: %s", strerror(error));
+		fcntl(infd, F_SETFL, inflag);
+		return 2;
+	}
+
+#define SYSUTIL_PASSLEN 2048
+	pbuf = (char *) calloc(0x1, SYSUTIL_PASSLEN);
+	if (pbuf == NULL) {
+		fcntl(infd, F_SETFL, inflag);
+		tcsetattr(infd, TCSANOW, &olds);
+		lua_pushnil(L);
+		lua_pushstring(L, "System out of memory");
+		return 2;
+	}
+
+	plen = 0;
+	for (;;) {
+		int isend = 0;
+		char cha = '\0';
+
+		if (read(infd, &cha, 0x1) != 0x1)
+			break;
+		if (cha == '\0' || cha == '\r' || cha == '\n')
+			isend = -1;
+
+		if (verbose) {
+			size_t mlen = isend ? 2 : 1;
+			const char * mask = isend ? "\r\n" : "*";
+			if (write(STDOUT_FILENO, mask, mlen) == (ssize_t) mlen)
+				tcflow(STDOUT_FILENO, TCOON);
+		}
+
+		if (isend != 0)
+			break;
+		pbuf[plen++] = cha;
+		if (plen >= SYSUTIL_PASSLEN)
+			break;
+	}
+#undef SYSUTIL_PASSLEN
+
+	/* restore terminal input mode to default */
+	tcflush(infd, TCIFLUSH);
+	fcntl(infd, F_SETFL, inflag);
+	tcsetattr(infd, TCSANOW, &olds);
+
+	lua_pushlstring(L, pbuf, plen);
+	if (plen > 0)
+		memset(pbuf, 0, plen); /* clear password memory */
+	free(pbuf);
+	return 1;
+}
+
 static const luaL_Reg sysutil_regs[] = {
 	{ "call",           sysutil_call },
 	{ "chdir",          sysutil_chdir },
@@ -1880,7 +1976,6 @@ static const luaL_Reg sysutil_regs[] = {
 	{ "getid",          sysutil_getid },       /* calls pthread_self() */
 	{ "getpid",         sysutil_getpid },
 	{ "getppid",        sysutil_getppid },
-	{ "gettid",         sysutil_gettid },
 	{ "glob",           sysutil_glob },
 	{ "kill",           sysutil_kill },
 	{ "killid",         sysutil_killid },      /* calls pthread_kill(...) */
@@ -1893,6 +1988,7 @@ static const luaL_Reg sysutil_regs[] = {
 	{ "open",           sysutil_open },
 	{ "read",           sysutil_read },
 	{ "readlink",       sysutil_readlink },
+	{ "readpass",       sysutil_readpass },
 	{ "rmdir",          sysutil_rmdir },
 	{ "setenv",         sysutil_setenv },
 	{ "setname",        sysutil_setname },
