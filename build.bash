@@ -201,10 +201,10 @@ srcpkg_enabled() {
 	local resp=''
 	[ -z "$1" ] && return 1
 	eval "resp=\${SRCPKG_$1}"
-	[ -z "${resp}" ] && return 0
+	[ -z "${resp}" ] && return 2
 	[ "${resp}" = "y" ] && return 0
 	[ "${resp}" = "1" ] && return 0
-	return 2
+	return 3
 }
 
 # register a source package to the list, `srcList
