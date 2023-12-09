@@ -24,7 +24,7 @@
 #include <unistd.h>
 
 #define SCRIPT_CHECK_SIZE     0x40000
-#define BINARY_MARKER_LINE    "###### BINARY-DATA-BEGIN"
+#define BINARY_MARKER_LINE    "======BINARY-DATA-BEGIN"
 
 int main(int argc, char *argv[])
 {
@@ -35,6 +35,7 @@ int main(int argc, char *argv[])
 	char * pbuf, * needle;
 	int ret, fd, error, rval;
 	const char * filp, * markp;
+	int notpipe = 1;
 
 	rval = 0;
 	fd = -1;
@@ -44,7 +45,7 @@ int main(int argc, char *argv[])
 	pbuf = needle = NULL;
 	markp = BINARY_MARKER_LINE;
 	if (argc <= 1) {
-		fputs("Error, no script specified.\n", stderr);
+		fprintf(stderr, "Error, no script specified.\n\tMARKER: %s\n", markp);
 		fflush(stderr);
 		rval = 1;
 		goto err0;
@@ -156,6 +157,7 @@ int main(int argc, char *argv[])
 
 	ret = fstat(STDOUT_FILENO, &stat_fs);
 	if (ret == 0 && S_ISFIFO(stat_fs.st_mode)) {
+		notpipe = 0;
 		ret = fcntl(STDOUT_FILENO, F_GETPIPE_SZ, 0);
 		if (ret < SCRIPT_CHECK_SIZE) {
 			ret = fcntl(STDOUT_FILENO, F_SETPIPE_SZ, SCRIPT_CHECK_SIZE);
@@ -198,6 +200,8 @@ int main(int argc, char *argv[])
 			break;
 		}
 	}
+	if (notpipe)
+		fsync(STDOUT_FILENO);
 
 err0:
 	if (fd != -1)
