@@ -1048,14 +1048,14 @@ static int sysutil_readlink(lua_State * L)
 		return 2;
 	}
 
-	output = (char *) malloc(APPUTIL_BUFSIZE);
+	output = (char *) malloc(2048);
 	if (output == NULL) {
 		lua_pushnil(L);
 		lua_pushstring(L, "system out of memory for readlink");
 		return 2;
 	}
 
-	rl1 = readlink(linkp, output, APPUTIL_BUFSIZE);
+	rl1 = readlink(linkp, output, 2048);
 	if (rl1 < 0) {
 		int error;
 		error = errno;
@@ -1067,10 +1067,57 @@ static int sysutil_readlink(lua_State * L)
 		return 2;
 	}
 
-	if (rl1 > APPUTIL_BUFSIZE)
-		rl1 = APPUTIL_BUFSIZE;
+	if (rl1 > 2048)
+		rl1 = 2048;
 	lua_pushlstring(L, output, (size_t) rl1);
 	free(output);
+	return 1;
+}
+
+static int sysutil_realpath(lua_State * L)
+{
+	int ntop;
+	char * real;
+	const char * unreal;
+
+	real = NULL;
+	unreal = NULL;
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+	ntop = lua_gettop(L);
+	if (ntop < 0x1 || lua_type(L, 1) != LUA_TSTRING) {
+		lua_pushnil(L);
+		lua_pushstring(L, "No invalid argument for realpath");
+		return 2;
+	}
+
+	unreal = lua_tolstring(L, 1, NULL);
+	if (unreal == NULL || unreal[0] == '\0') {
+		lua_pushnil(L);
+		lua_pushstring(L, "Invalid string argument for realpath");
+		return 2;
+	}
+
+	real = (char *) calloc(0x1, 2048);
+	if (real == NULL) {
+		lua_pushnil(L);
+		lua_pushstring(L, "System out of memory");
+		return 2;
+	}
+
+	if (realpath(unreal, real) == NULL) {
+		int error = errno;
+		lua_pushnil(L);
+		lua_pushfstring(L, "realpath(%s) has failed: %s",
+			unreal, strerror(error));
+		free(real);
+		errno = error;
+		return 2;
+	}
+
+	real[2048 - 1] = '\0';
+	lua_pushstring(L, real);
+	free(real);
 	return 1;
 }
 
@@ -1989,6 +2036,7 @@ static const luaL_Reg sysutil_regs[] = {
 	{ "read",           sysutil_read },
 	{ "readlink",       sysutil_readlink },
 	{ "readpass",       sysutil_readpass },
+	{ "realpath",       sysutil_realpath },
 	{ "rmdir",          sysutil_rmdir },
 	{ "setenv",         sysutil_setenv },
 	{ "setname",        sysutil_setname },
