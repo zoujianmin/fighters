@@ -11,13 +11,61 @@ local sshmt = {}
 local sfmt = string.format
 
 -- use legacy SCP protocol for `scp:
-ssht["OPT_LSCP"] = false
+ssht["opt_scp"] = false
 ssht["set_scp"] = function (okay)
-	ssht["OPT_LSCP"] = okay
+	ssht["opt_scp"] = okay
 end
-ssht["OPT_LRSA"] = false
+ssht["opt_rsa"] = false
 ssht["set_rsa"] = function (okay)
-	ssht["OPT_LRSA"] = okay
+	ssht["opt_rsa"] = okay
+end
+ssht["opt_ident"] = false
+ssht["set_ident"] = function (ident)
+	if type(ident) ~= "string" then
+		ssht["opt_ident"] = false
+		return true
+	end
+	local idst = sysutil.stat(ident)
+	if type(idst) ~= "table" or not idst["isreg"] then
+		io.stderr:write(sfmt("Error, invalid identity file: '%s'\n", ident))
+		io.stderr:flush()
+		return false
+	end
+	ssht["opt_ident"] = "-oIdentityFile=" .. ident
+	return true
+end
+
+ssht["cpath"] = function (uhost, port)
+	if type(uhost) ~= "string" or #uhost == 0 then
+		io.stderr:write("Error, invalid user@host specified.\n")
+		io.stderr:flush()
+		return nil
+	end
+
+	if port == nil then port = 22 end
+	if type(port) == "string" then port = tonumber(port) end
+	if type(port) ~= "number" or port <= 0 or port >= 65536 then
+		io.stderr:write(sfmt("Error, invalid port number for '%s'\n", uhost))
+		io.stderr:flush()
+		return nil
+	end
+
+	local chksum = sysutil.sha256(sfmt("%s:%d", uhost, port), false)
+	if type(chksum) ~= "string" or #chksum < 12 then
+		io.stderr:write(sfmt("Error, compute sha256 for '%s:%d'\n", uhost, port))
+		io.stderr:flush()
+		return nil
+	end
+
+	local fixstr = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+	local fixlen = string.len(fixstr)
+	local cpath = {}
+	for idx = 1, 12 do
+		local rem = string.byte(chksum, idx) % fixlen
+		cpath[idx] = fixstr:sub(rem, rem)
+	end
+	cpath = table.concat(cpath)
+	return ".ctrl-" .. cpath
 end
 
 local function ssh_close(self)
@@ -82,12 +130,13 @@ ssht["open"] = function (uhost, cpath, pno)
 	end
 
 	local sshcmd, an = { [1] = "ssh" }, 1
-	an = an + 1; sshcmd[an] = "-oStrictHostKeyChecking=no"
-	an = an + 1; sshcmd[an] = "-oUserKnownHostsFile=/dev/null"
-	if ssht["OPT_LRSA"] then
+	if ssht.opt_rsa then
 		an = an + 1; sshcmd[an] = "-oHostKeyAlgorithms=+ssh-rsa"
 		an = an + 1; sshcmd[an] = "-oPubkeyAcceptedAlgorithms=+ssh-rsa"
 	end
+	if ssht["opt_ident"] then an = an + 1; sshcmd[an] = ssht["opt_ident"] end
+	an = an + 1; sshcmd[an] = "-oStrictHostKeyChecking=no"
+	an = an + 1; sshcmd[an] = "-oUserKnownHostsFile=/dev/null"
 	an = an + 1; sshcmd[an] = "-oTCPKeepAlive=yes"
 	an = an + 1; sshcmd[an] = "-oConnectionAttempts=3"
 	an = an + 1; sshcmd[an] = "-oConnectTimeout=6"
@@ -158,7 +207,7 @@ sshmt["copy"] = function (self, src, dest)
 	end
 
 	local scpcmd, an = { [1] = "scp" }, 1
-	if ssht.OPT_LSCP then an = an + 1; scpcmd[an] = "-O" end
+	if ssht.opt_scp then an = an + 1; scpcmd[an] = "-O" end
 	an = an + 1; scpcmd[an] = "-oStrictHostKeyChecking=no"
 	an = an + 1; scpcmd[an] = "-oUserKnownHostsFile=/dev/null"
 	an = an + 1; scpcmd[an] = sfmt("-oPort=%d", self["port"])
