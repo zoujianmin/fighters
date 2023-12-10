@@ -35,6 +35,23 @@ build_bash() {
 	return 2
 }
 
+ftdel_setkey() {
+	if [ -z "$1" ] ; then
+		export -n FTDEL_SSHKEY
+		unset -v FTDEL_SSHKEY
+		echo "Fighter delivery SSH-KEY undefined."
+		return 0
+	fi
+
+	local SSHKEY=$(realpath "$1")
+	if [ ! -f "${SSHKEY}" ] ; then
+		echo "Error, SSH-KEY not found: '$1'." 1>&2
+		return 1
+	fi
+	export FTDEL_SSHKEY="${SSHKEY}"
+	return 0
+}
+
 ftdel_sethost() {
 	if [ -z "$1" ] ; then
 		echo "Error, no 'user@host' specified." 1>&2
@@ -44,6 +61,7 @@ ftdel_sethost() {
 	declare -x FTDEL_UHOST="$1"
 	if [ -z "$2" ] ; then
 		export -n FTDEL_PORTNO
+		unset -v FTDEL_PORTNO
 		echo "FTDEL target host: ${FTDEL_UHOST}"
 	else
 		declare -x FTDEL_PORTNO="$2"
