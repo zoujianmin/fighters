@@ -4,7 +4,7 @@
 # Simple environment script for fighters
 # 2023/12/10
 
-build_bash() {
+bbash() {
 	local CURDIR="$PWD"
 	if [ ! -d "${CURDIR}" ] ; then
 		echo "Error, invalid working directory: '${CURDIR}'" 1>&2
@@ -48,7 +48,7 @@ ftdel_setkey() {
 		echo "Error, SSH-KEY not found: '$1'." 1>&2
 		return 1
 	fi
-	export FTDEL_SSHKEY="${SSHKEY}"
+	declare -g -x FTDEL_SSHKEY="${SSHKEY}"
 	return 0
 }
 
@@ -58,14 +58,14 @@ ftdel_sethost() {
 		return 1
 	fi
 
-	declare -x FTDEL_UHOST="$1"
+	declare -g -x FTDEL_HOST="$1"
 	if [ -z "$2" ] ; then
-		export -n FTDEL_PORTNO
-		unset -v FTDEL_PORTNO
-		echo "FTDEL target host: ${FTDEL_UHOST}"
+		export -n FTDEL_PORT
+		unset -v FTDEL_PORT
+		echo "FTDEL target host: ${FTDEL_HOST}"
 	else
-		declare -x FTDEL_PORTNO="$2"
-		echo "FTDEL target host: ${FTDEL_UHOST}:${FTDEL_PORTNO}"
+		declare -g -x FTDEL_PORT="$2"
+		echo "FTDEL target host: ${FTDEL_HOST}:${FTDEL_PORT}"
 	fi
 	return 0
 }
