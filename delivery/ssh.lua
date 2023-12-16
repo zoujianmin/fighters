@@ -69,11 +69,11 @@ ssht["cpath"] = function (uhost, port)
 end
 
 local function ssh_close(self)
-	if type(self) ~= "table" or not self.okay then
+	if type(self) ~= "table" or not self.cpath then
 		return false -- already closed
 	end
 	local port, uhost, cpath = self.port, self.uhost, self.cpath
-	self.port, self.uhost, self.cpath, self.okay = nil, nil, nil, nil
+	self.port, self.uhost, self.cpath = nil, nil, nil
 
 	local sshcmd, an = { [1] = "ssh" }, 1
 	an = an + 1; sshcmd[an] = "-oStrictHostKeyChecking=no"
@@ -161,7 +161,7 @@ end
 
 sshmt["close"] = ssh_close
 sshmt["call"] = function (self, shcmd, capture)
-	if type(self) ~= "table" or not self.okay then
+	if type(self) ~= "table" or not self.cpath then
 		io.stderr:write("Error, SSH object already destroyed.\n")
 		io.stderr:flush()
 		return false
@@ -184,15 +184,15 @@ sshmt["call"] = function (self, shcmd, capture)
 	return okay, output
 end
 
-sshmt["copy"] = function (self, src, dest)
-	if type(self) ~= "table" or not self.okay then
+sshmt["push"] = function (self, src, dest)
+	if type(self) ~= "table" or not self.cpath then
 		io.stderr:write("Error, cannot copy for an invalid SSH object.\n")
 		io.stderr:flush()
 		return false
 	end
 
 	if type(dest) ~= "string" or #dest == 0 then
-		io.stderr:write("Error, invalid destination for sshcopy\n")
+		io.stderr:write("Error, invalid destination for ssh-pull\n")
 		io.stderr:flush()
 		return false
 	end
@@ -215,6 +215,38 @@ sshmt["copy"] = function (self, src, dest)
 	an = an + 1; scpcmd[an] = "-oControlPath=" .. self["cpath"]
 	an = an + 1; scpcmd[an] = src
 	an = an + 1; scpcmd[an] = sfmt("%s:%s", self["uhost"], dest)
+	return sysutil.call(0, scpcmd) == 0
+end
+
+sshmt["pull"] = function (self, src, dest)
+	if type(self) ~= "table" or not self.cpath then
+		io.stderr:write("Error, cannot copy for an invalid SSH object.\n")
+		io.stderr:flush()
+		return false
+	end
+
+	if type(src) ~= "string" or #src == 0 then
+		io.stderr:write("Error, invalid target source for ssh-pull\n")
+		io.stderr:flush()
+		return false
+	end
+
+	if type(dest) ~= "string" or #dest == 0 then
+		io.stderr:write("Error, invalid local destination for ssh-pull\n")
+		io.stderr:flush()
+		return false
+	end
+	sysutil.unlink(dest) -- if `dest is not a directory, remove it
+
+	local scpcmd, an = { [1] = "scp" }, 1
+	if ssht.opt_scp then an = an + 1; scpcmd[an] = "-O" end
+	an = an + 1; scpcmd[an] = "-oStrictHostKeyChecking=no"
+	an = an + 1; scpcmd[an] = "-oUserKnownHostsFile=/dev/null"
+	an = an + 1; scpcmd[an] = sfmt("-oPort=%d", self["port"])
+	an = an + 1; scpcmd[an] = "-oControlMaster=no"
+	an = an + 1; scpcmd[an] = "-oControlPath=" .. self["cpath"]
+	an = an + 1; scpcmd[an] = sfmt("%s:%s", self["uhost"], src)
+	an = an + 1; scpcmd[an] = dest
 	return sysutil.call(0, scpcmd) == 0
 end
 
