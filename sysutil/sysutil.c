@@ -2012,6 +2012,31 @@ static int sysutil_readpass(lua_State * L)
 	return 1;
 }
 
+static int sysutil_exitval(lua_State * L)
+{
+	int eval;
+	lua_Integer luai;
+
+	luai = 0;
+	if (sysutil_checkstack(L, 2) < 0)
+		return 0;
+	if (!sysutil_isinteger(L, 1, &luai)) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	eval = (int) luai;
+	if (WIFEXITED(eval)) {
+		lua_pushboolean(L, 1);
+		luai = (lua_Integer) WEXITSTATUS(eval);
+		lua_pushinteger(L, luai);
+		return 2;
+	}
+
+	lua_pushboolean(L, 0);
+	return 1;
+}
+
 static const luaL_Reg sysutil_regs[] = {
 	{ "call",           sysutil_call },
 	{ "chdir",          sysutil_chdir },
@@ -2019,6 +2044,7 @@ static const luaL_Reg sysutil_regs[] = {
 	{ "cloexec",        sysutil_cloexec },
 	{ "close",          sysutil_close },
 	{ "delay",          sysutil_delay },
+	{ "exitval",        sysutil_exitval },
 	{ "getenv",         sysutil_getenv },
 	{ "getid",          sysutil_getid },       /* calls pthread_self() */
 	{ "getpid",         sysutil_getpid },
