@@ -1,0 +1,208 @@
+#!/opt/Lua51/bin/lua
+
+-- Copyright 2023 Ye Holmes <yeholmes@outlook.com>
+-- Licensed under the Apache License, Version 2.0
+-- Fighter Delivery Template Script
+
+-- load external Lua modules
+local ssh = require "ssh"
+local sysutil = require "sysutil"
+
+-- store function to local variable
+local fmt = string.format
+
+-- global variable definitions
+local FD_FUNCS = {}
+local FD_HOST, FD_PORT = nil, nil
+local FD_CDIR, FD_SSHKEY = nil, nil
+local OP_PUSH, OP_EXEC, OP_PULL = 1, 2, 3
+
+-- alter SSH options
+ssh.set_scp(true)
+ssh.set_rsa(true)
+
+-- a list of operations for target device
+local fdops = {}
+fdops[#fdops + 1] = { ["op"] = OP_EXEC, ["expect"] = "rv64", ["retval"] = 12,
+	["command"] = "cat /proc/cpuinfo ; rm -rf /tmp/test.txt ; exit 12" }
+fdops[#fdops + 1] = { ["op"] = OP_PUSH, ["src"] = "./ftdel", ["dest"] = "/tmp/test.txt" }
+fdops[#fdops + 1] = { ["op"] = OP_PULL, ["src"] = "/tmp/test.txt", ["dest"] = "./ftdel.lua" }
+fdops[#fdops + 1] = { ["op"] = OP_EXEC, ["command"] = "cat /tmp/test.txt ; rm -rf /tmp/test.txt" }
+
+local function check_md5sum(fpath, expect)
+	if type(fpath) ~= "string" or #fpath == 0 then
+		io.stderr:write("Error, invalid path for check_md5sum function\n")
+		io.stderr:flush()
+		return false
+	end
+
+	local okay, output = sysutil.call(sysutil.OPT_OUTPUT, "md5sum", fpath)
+	if okay ~= 0 or type(output) ~= "string" then
+		io.stderr:write(fmt("Error, md5sum(%s) has failed.\n", fpath))
+		io.stderr:flush()
+		return false
+	end
+
+	local md5_0 = string.match(output, "^(%x+)")
+	if not md5_0 or string.len(md5_0) ~= 32 then
+		io.stderr:write(fmt("Error, invalid output md5sum(%s):\n%s\n", output))
+		io.stderr:flush()
+		return false
+	end
+
+	if type(expect) ~= "string" then return md5_0 end
+	local md5_1 = string.match(expect, "^(%x+)")
+	if md5_1 ~= md5_0 then
+		io.stderr:write(fmt("Error, md5sum values does not match: %s <=> %s\n",
+			expect, md5_0))
+		io.stderr:flush()
+		return false
+	end
+	return md5_0
+end
+
+FD_FUNCS[OP_PUSH] = function (fdh, ops)
+	io.stdout:write(fmt("Pushing file: '%s' => '%s'...\n",
+		ops.src, ops.dest))
+	io.stdout:flush()
+	if not fdh:push(ops.src, ops.dest) then
+		io.stderr:write(fmt("Error, failed to push '%s' to '%s'\n",
+			ops.src, ops.dest))
+		io.stderr:flush()
+		return false
+	end
+
+	local eval, mout = fdh:call(fmt("exec md5sum %s", ops.dest), true)
+	if eval ~= 0 or type(mout) ~= "string" then
+		io.stderr:write(fmt("Error, MD5SUM failed on target device: %s\n",
+			ops.dest))
+		io.stderr:flush()
+		return false
+	end
+
+	if not check_md5sum(ops.src, mout) then return false end
+	return true
+end
+
+FD_FUNCS[OP_EXEC] = function (fdh, ops)
+	io.stdout:write(fmt("Executing command: %s\n", ops.command))
+	io.stdout:flush()
+	local eval, eout = fdh:call(ops.command, ops.expect and true or false)
+	local exited, exitval = sysutil.exitval(eval)
+	if ops.retval and (not exited or exitval ~= ops.retval) then
+		io.stderr:write("Error, command has not expected return value.\n")
+		io.stderr:flush()
+		return false
+	end
+
+	if ops.expect and (type(eout) ~= "string" or not string.find(eout, ops.expect, 1, true)) then
+		io.stderr:write(fmt("Error, expected output not found: %s\n", ops.expect))
+		io.stderr:flush()
+		return false
+	end
+	return true
+end
+
+FD_FUNCS[OP_PULL] = function (fdh, ops)
+	io.stdout:write(fmt("Pulling file: '%s' <= '%s'...\n", ops.dest, ops.src))
+	io.stdout:flush()
+	if not fdh:pull(ops.src, ops.dest) then
+		io.stderr:write(fmt("Error, failed to pull '%s' as '%s'.\n",
+			ops.src, ops.dest))
+		io.stderr:flush()
+		return false
+	end
+
+	-- TODO: add md5sum check
+	return true
+end
+
+local function ftdel_ops()
+	if FD_SSHKEY then ssh.set_ident(FD_SSHKEY) end
+	local ctrlp = ssh.cpath(FD_HOST, FD_PORT)
+	if type(ctrlp) ~= "string" then return false end
+	ctrlp = fmt("%s/%s", FD_CDIR, ctrlp)
+
+	local rdev = ssh.open(FD_HOST, ctrlp, FD_PORT)
+	if not rdev then return false end
+
+	for _, oper in ipairs(fdops) do
+		local func = FD_FUNCS[oper.op]
+		if type(func) ~= "function" then
+			io.stderr:write("Error, unknown operation found.\n")
+			io.stderr:flush()
+			rdev:close(); rdev = nil
+			return false
+		end
+
+		local okay = func(rdev, oper)
+		if not okay then
+			rdev:close(); rdev = nil
+			return false
+		end
+	end
+
+	rdev:close(); rdev = nil
+	local sepstr = "\n******************************************************************\n"
+	io.stdout:write(sepstr)
+	io.stdout:write(fmt("NOTE: ALL OPERATIONS COMPLETED FOR '%s' at port %d",
+		FD_HOST, FD_PORT or 22))
+	io.stdout:write(sepstr)
+	io.stdout:flush()
+	return true
+end
+
+local function ftdel_init()
+	local home = os.getenv("HOME")
+	if type(home) ~= "string" or #home == 0 then
+		io.stderr:write("Error, HOME directory not found.\n")
+		io.stderr:flush()
+		return false
+	end
+
+	local ctrldir = fmt("%s/.ftdel", home)
+	sysutil.mkdir(ctrldir)
+	local ctrlst = sysutil.stat(ctrldir)
+	if type(ctrlst) ~= "table" or not ctrlst["isdir"] then
+		io.stderr:write(fmt("Error, cannot create directory: %s\n", ctrldir))
+		io.stderr:flush()
+		return false
+	end
+	FD_CDIR = ctrldir
+
+	local uhost = os.getenv("FTDEL_HOST")
+	if type(uhost) ~= "string" or #uhost == 0 then
+		io.stderr:write("Error, no valid user@host found.\n")
+		io.stderr:flush()
+		return false
+	end
+	FD_HOST = uhost
+
+	local port = os.getenv("FTDEL_PORT")
+	if type(port) == "string" and #port > 0 then
+		port = tonumber(port)
+		if type(port) == "number" and port > 0 and port < 65536 then
+			FD_PORT = math.floor(port)
+		else
+			io.stderr:write("Error, invalid port-number specified.\n")
+			io.stderr:flush()
+			return false
+		end
+	end
+
+	local privkey = os.getenv("FTDEL_SSHKEY")
+	if type(privkey) == "string" and #privkey > 0 then
+		local pst = sysutil.stat(privkey)
+		if type(pst) == "table" and pst["isreg"] then
+			FD_SSHKEY = privkey
+		else
+			io.stderr:write(fmt("Error, SSH private key not found: '%s'\n", privkey))
+			io.stderr:flush()
+			return false
+		end
+	end
+	return true
+end
+
+if not ftdel_init() then os.exit(1) end
+os.exit(ftdel_ops() and 0 or 2)
