@@ -160,7 +160,7 @@ ssht["open"] = function (uhost, cpath, pno)
 end
 
 sshmt["close"] = ssh_close
-sshmt["call"] = function (self, shcmd, capture)
+sshmt["call"] = function (self, shcmd, capt)
 	if type(self) ~= "table" or not self.cpath then
 		io.stderr:write("Error, SSH object already destroyed.\n")
 		io.stderr:flush()
@@ -171,7 +171,7 @@ sshmt["call"] = function (self, shcmd, capture)
 		io.stderr:flush()
 		return false
 	end
-	if capture then capture = sysutil.OPT_OUTALL else capture = 0 end
+	if capt then capt = sysutil.OPT_OUTALL else capt = 0 end
 	local sshcmd, an = { [1] = "ssh" }, 1
 	an = an + 1; sshcmd[an] = "-oStrictHostKeyChecking=no"
 	an = an + 1; sshcmd[an] = "-oUserKnownHostsFile=/dev/null"
@@ -180,7 +180,7 @@ sshmt["call"] = function (self, shcmd, capture)
 	an = an + 1; sshcmd[an] = "-oControlPath=" .. self["cpath"]
 	an = an + 1; sshcmd[an] = self["uhost"]
 	an = an + 1; sshcmd[an] = shcmd
-	local okay, output = sysutil.call(capture, sshcmd)
+	local okay, output = sysutil.call(capt, sshcmd)
 	return okay, output
 end
 
