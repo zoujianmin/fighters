@@ -36,11 +36,12 @@ int cmhash_getval(cmhash_t chash_,
 	const void * cmkey, unsigned int cmlen,
 	union cm_hval * valp)
 {
-	struct cmhash * hashptr;
+	struct cmhash * hashptr = NULL;
 	struct cmhash * chash = (struct cmhash *) chash_;
 
-	hashptr = NULL;
-	if (chash == NULL || cmkey == NULL || cmlen == 0) {
+	if (chash_ == NULL)
+		return -ENOENT;
+	if (cmkey == NULL || cmlen == 0) {
 		fprintf(stderr, "Error, invalid arguments found in [%s]\n",
 			__FUNCTION__);
 		fflush(stderr);
