@@ -65,7 +65,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "base64.h"
+#include "openwrt_base64.h"
 
 static const char Base64[] =
 	"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
