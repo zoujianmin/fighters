@@ -37,6 +37,7 @@
 #include <lauxlib.h>
 #include "apputil.h"
 #include "zsha256_util.h"
+#include "openwrt_base64.h"
 
 #include <glob.h> /* request for glob function */
 
@@ -2037,7 +2038,62 @@ static int sysutil_exitval(lua_State * L)
 	return 1;
 }
 
+static int sysutil_base64(lua_State * L)
+{
+	int ret, isde;
+	size_t rlen, dlen;
+	const char * rawd;
+	char * outd = NULL;
+
+	isde = 0;
+	rawd = NULL;
+	rlen = dlen = 0;
+	ret = lua_gettop(L);
+	if (ret >= 1 && lua_type(L, 1) == LUA_TSTRING)
+		rawd = lua_tolstring(L, 1, &rlen);
+
+	if (rawd == NULL || rlen == 0) {
+		lua_pushnil(L);
+		lua_pushstring(L, "invalid argument for base64 method");
+		return 2;
+	}
+
+	if (ret >= 2 && lua_type(L, 2) == LUA_TBOOLEAN &&
+		lua_toboolean(L, 2)) {
+		// base64 buffer decode
+		isde = -1;
+		dlen = B64_DECODE_LEN(rlen) + 4;
+		outd = (char *) malloc(dlen);
+		if (outd == NULL)
+			goto oom;
+		ret = b64_decode(rawd, outd, dlen - 1);
+	} else {
+		dlen = B64_ENCODE_LEN(rlen) + 4;
+		outd = (char *) malloc(dlen);
+		if (outd == NULL)
+			goto oom;
+		ret = b64_encode(rawd, rlen, outd, dlen - 1);
+	}
+
+	if (ret > 0) {
+		lua_pushlstring(L, outd, (size_t) ret);
+		free(outd);
+		return 1;
+	}
+
+	free(outd);
+	lua_pushnil(L);
+	lua_pushfstring(L, "failed to %scode base64 buffer", isde ? "de" : "en");
+	return 2;
+
+oom:
+	lua_pushnil(L);
+	lua_pushstring(L, "system out of memory");
+	return 2;
+}
+
 static const luaL_Reg sysutil_regs[] = {
+	{ "base64",         sysutil_base64 },
 	{ "call",           sysutil_call },
 	{ "chdir",          sysutil_chdir },
 	{ "chmod",          sysutil_chmod },

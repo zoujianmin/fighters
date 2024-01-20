@@ -18,12 +18,12 @@ STRIP      = strip
 CFLAGS     = -Wall -fPIC -D_GNU_SOURCE -ggdb -Os -I.
 CFLAGS    += -I/opt/ub1204/include/lua5.1
 LDFLAGS   := -lpthread
-TARGETS    = apputil.o sysutil.so sysutil.o zsha256_util.o zsha256_test.o zsha256
+TARGETS    = apputil.o base64.o sysutil.so sysutil.o zsha256_util.o zsha256_test.o zsha256
 
 .PHONY: all clean
 all: $(TARGETS)
 
-sysutil.so: sysutil.o apputil.o zsha256_util.o
+sysutil.so: sysutil.o apputil.o zsha256_util.o base64.o
 	$(CC) -shared -o $@ $^ -lpthread
 	$(STRIP) -s $@
 
