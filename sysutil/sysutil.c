@@ -31,6 +31,7 @@
 #include <netdb.h>
 #include <pthread.h>
 #include <sys/prctl.h>
+#include <sys/file.h>
 #include <termios.h>
 
 #include <lua.h>
@@ -2092,6 +2093,129 @@ oom:
 	return 2;
 }
 
+static int sysutil_lockfile(lua_State * L)
+{
+	char * fptr;
+	size_t msglen;
+	struct timespec spec;
+	int ret, fd, timeout;
+	const char * filp, * msgptr;
+
+	fd = -1;
+	msglen = 0;
+	fptr = NULL;
+	timeout = -1;
+	filp = msgptr = NULL;
+	ret = lua_gettop(L);
+	if (ret >= 1 && lua_type(L, 1) == LUA_TSTRING)
+		filp = lua_tolstring(L, 1, NULL);
+	if (ret >= 2 && lua_type(L, 2) == LUA_TSTRING)
+		msgptr = lua_tolstring(L, 2, &msglen);
+	if (ret >= 3 && lua_type(L, 3) == LUA_TNUMBER)
+		timeout = (int) lua_tonumber(L, 3);
+
+	if (filp == NULL || filp[0] == '\0') {
+		lua_pushnil(L);
+		lua_pushstring(L, "no file path specified");
+		return 2;
+	}
+
+	if (msgptr && msglen > 0) {
+		fptr = (char *) malloc(msglen + 1);
+		if (fptr == NULL) {
+			lua_pushnil(L);
+			lua_pushstring(L, "System Out Of Memory");
+			return 2;
+		}
+		memcpy(fptr, msgptr, msglen);
+		fptr[msglen] = '\0';
+	}
+
+	fd = open(filp, O_WRONLY | O_CLOEXEC | O_CREAT | O_EXCL, 0644);
+	if (fd == -1) {
+		int error;
+
+		error = errno;
+		if (error != EEXIST) {
+			lua_pushnil(L);
+			lua_pushfstring(L, "cannot create file '%s': %s",
+				filp, strerror(error));
+			free(fptr);
+			return 2;
+		}
+
+		spec.tv_sec = 0; /* delay 0.15 second */
+		spec.tv_nsec = 150 * 1000000;
+		nanosleep(&spec, NULL);
+		fd = open(filp, O_WRONLY | O_CLOEXEC);
+		if (fd == -1) {
+			error = errno;
+			lua_pushnil(L);
+			lua_pushfstring(L, "cannot open file '%s': %s",
+				filp, strerror(error));
+			free(fptr);
+			return 2;
+		}
+	}
+
+	if (timeout > 0) {
+		spec.tv_sec = 0; spec.tv_nsec = 0;
+		clock_gettime(CLOCK_BOOTTIME, &spec);
+	}
+
+	for (;;) {
+		int error;
+		long long flow;
+		struct timespec nowt;
+		ret = flock(fd, LOCK_EX | (timeout > 0 ? LOCK_NB : 0));
+		if (ret == 0)
+			break;
+
+		error = errno;
+		if (error == EINTR)
+			continue;
+
+		if (timeout <= 0) {
+			close(fd);
+			lua_pushnil(L);
+			lua_pushfstring(L, "failed to lock file '%s': %s",
+				filp, strerror(error));
+			free(fptr);
+			return 2;
+		}
+
+		nowt.tv_sec = 0; nowt.tv_nsec = 0;
+		clock_gettime(CLOCK_BOOTTIME, &nowt);
+		flow = (long long) (nowt.tv_sec - spec.tv_sec);
+		flow = flow * 1000 + (long long) ((nowt.tv_nsec - spec.tv_nsec) / 1000000);
+		if (flow >= (long long) timeout) {
+			close(fd);
+			lua_pushnil(L);
+			lua_pushfstring(L, "lock file timed out: '%s'", filp);
+			free(fptr);
+			return 2;
+		}
+
+		nowt.tv_sec = 0; nowt.tv_nsec = 200 * 1000000;
+		nanosleep(&nowt, NULL);
+	}
+
+	if (fptr && msglen > 0) {
+		struct stat st;
+		ret = fstat(fd, &st);
+		if (ret == 0 && st.st_size >= 65536)
+			ftruncate(fd, 128);
+		lseek(fd, 0, SEEK_END);
+		if (write(fd, fptr, msglen) == (ssize_t) msglen) {
+			fsync(fd);
+		}
+	}
+
+	free(fptr);
+	lua_pushinteger(L, fd);
+	return 1;
+}
+
 static const luaL_Reg sysutil_regs[] = {
 	{ "base64",         sysutil_base64 },
 	{ "call",           sysutil_call },
@@ -2109,6 +2233,7 @@ static const luaL_Reg sysutil_regs[] = {
 	{ "kill",           sysutil_kill },
 	{ "killid",         sysutil_killid },      /* calls pthread_kill(...) */
 	{ "killpg",         sysutil_killpg },
+	{ "lockfile",       sysutil_lockfile },
 	{ "lseek",          sysutil_lseek },
 	{ "mdelay",         sysutil_mdelay },
 	{ "mkdir",          sysutil_mkdir },
