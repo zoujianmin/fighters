@@ -288,7 +288,7 @@ build_source() {
             echo "Error, failed to configure '${sbdir}'" 1>&2
             return 8
         fi
-        touch "${TAG_CONFIG}"
+        touch "$FTOPDIR/$sbdir/${TAG_CONFIG}"
     fi
 
     local dobuild=1
@@ -307,7 +307,7 @@ build_source() {
             echo "Error, failed to build '${sbdir}'" 1>&2
             return 10
         fi
-        touch "${TAG_BUILT}"
+        touch "$FTOPDIR/$sbdir/${TAG_BUILT}"
     fi
     return 0
 }
