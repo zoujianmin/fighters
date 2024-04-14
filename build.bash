@@ -198,6 +198,15 @@ fetch_source_dir() {
 
 # register a source package to the list, `srcList
 register_source() {
+    # 判断软件包是否配置:
+    if [ $# -ge 5 ] ; then
+        local ftpkg=CONFIG_$1
+        if [ "${!ftpkg}" != "y" ] ; then
+            return 0
+        fi
+        shift
+    fi
+
     local -r srcpkg="$1"
     # check the source path
     if [ -z "${srcpkg}" ] ; then
